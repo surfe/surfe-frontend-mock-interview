@@ -7,17 +7,19 @@ import (
 	"strings"
 
 	"github.com/surfe/mock-api/internal/data"
+	"github.com/surfe/mock-api/internal/database"
 	"github.com/surfe/mock-api/internal/models"
 )
 
 // Handler holds dependencies for HTTP handlers
 type Handler struct {
 	data *data.MockData
+	db   *database.DB
 }
 
-// NewHandler creates a new handler with the given mock data
-func NewHandler(d *data.MockData) *Handler {
-	return &Handler{data: d}
+// NewHandler creates a new handler with the given mock data and database
+func NewHandler(d *data.MockData, db *database.DB) *Handler {
+	return &Handler{data: d, db: db}
 }
 
 // GetContact godoc
@@ -73,7 +75,11 @@ func (h *Handler) StartEnrichment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enrichment := h.data.CreateEnrichment(req.UserID)
+	enrichment, err := h.db.CreateEnrichment(req.UserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create enrichment")
+		return
+	}
 
 	response := models.EnrichmentStartResponse{
 		ID:      enrichment.ID,
@@ -101,8 +107,12 @@ func (h *Handler) GetEnrichment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enrichment, exists := h.data.GetEnrichment(id)
-	if !exists {
+	enrichment, err := h.db.GetEnrichment(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get enrichment")
+		return
+	}
+	if enrichment == nil {
 		writeError(w, http.StatusNotFound, "enrichment not found")
 		return
 	}

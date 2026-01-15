@@ -57,7 +57,9 @@ Swagger UI is available at: **http://localhost:8080/docs/**
 | `c3d4e5f6-a7b8-9012-cdef-123456789012` | Bob Johnson | StartupDev | CTO |
 | `d4e5f6a7-b8c9-0123-def1-234567890123` | Alice Williams | BigCorp Inc | Sales Director |
 
-### Pre-seeded Enrichments (Different States)
+### Pre-seeded Enrichments (Static - for testing UI states)
+
+These enrichments **never change** and are always available for testing different UI states:
 
 | UUID | Status | User |
 |------|--------|------|
@@ -110,12 +112,10 @@ Response:
 ```json
 {
   "id": "generated-uuid-here",
-  "status": "in_progress",
+  "status": "pending",
   "message": "Enrichment started successfully"
 }
 ```
-
-> **Note:** New enrichments start as `in_progress` and automatically transition to `completed` after 3 seconds.
 
 ### Get enrichment status (completed example)
 
@@ -166,10 +166,35 @@ Response:
 
 When you create a new enrichment via `POST /enrichment/start`:
 
-1. Returns immediately with status `in_progress`
-2. After **3 seconds**, automatically transitions to `completed` with mock result data
+```
+pending ──(10s)──> in_progress ──(50s)──> completed
+```
 
-Pre-seeded enrichments keep their static states (`pending`, `in_progress`, `completed`, `failed`) for testing different UI states.
+1. **Immediately**: Returns with status `pending`
+2. **After 10 seconds**: Transitions to `in_progress`
+3. **After 1 minute total**: Transitions to `completed` with mock result data
+
+### Testing the flow
+
+```bash
+# 1. Start an enrichment
+curl -X POST http://localhost:8080/enrichment/start \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}'
+
+# Response: {"id": "abc-123", "status": "pending", ...}
+
+# 2. Poll for status changes
+curl http://localhost:8080/enrichment/abc-123
+
+# After ~10s: status = "in_progress"
+# After ~60s: status = "completed" with result data
+```
+
+### Data persistence
+
+- **In-memory database**: All dynamically created enrichments are lost on restart
+- **Seed data always available**: The 4 static enrichments (pending, in_progress, completed, failed) are re-seeded on every startup
 
 ---
 
@@ -177,10 +202,10 @@ Pre-seeded enrichments keep their static states (`pending`, `in_progress`, `comp
 
 Edit `internal/data/mock_data.go` to:
 - Add/remove contacts
-- Change enrichment states
 - Update third-party information
 
-The file contains clearly marked sections for each data type.
+Edit `internal/database/database.go` (`SeedStaticEnrichments`) to:
+- Change pre-seeded enrichment states
 
 ---
 
@@ -191,10 +216,12 @@ The file contains clearly marked sections for each data type.
 ├── cmd/server/main.go           # Entry point
 ├── internal/
 │   ├── models/models.go         # Data structures
-│   ├── data/mock_data.go        # Mock data (edit this!)
-│   └── handlers/handlers.go     # HTTP handlers
+│   ├── data/mock_data.go        # Contacts & third-party data
+│   ├── database/database.go     # SQLite database layer
+│   ├── handlers/handlers.go     # HTTP handlers
+│   └── worker/worker.go         # Background enrichment processor
 ├── docs/                        # Swagger documentation
-├── Dockerfile                   # Multi-stage build (~10MB image)
+├── Dockerfile                   # Multi-stage build
 ├── docker-compose.yml
 └── Makefile
 ```
