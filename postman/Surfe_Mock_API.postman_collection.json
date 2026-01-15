@@ -1,0 +1,306 @@
+{
+	"info": {
+		"_postman_id": "surfe-mock-api-collection",
+		"name": "Surfe Mock API",
+		"description": "Mock API for frontend interview exercises. Provides endpoints for contact management, data enrichment, and third-party lookups.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["health"]
+						},
+						"description": "Check if the API is running"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Contacts",
+			"item": [
+				{
+					"name": "Get Contact - John Doe",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/contact/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+							"host": ["{{baseUrl}}"],
+							"path": ["contact", "a1b2c3d4-e5f6-7890-abcd-ef1234567890"]
+						},
+						"description": "Get contact information for John Doe"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Contact - Jane Smith",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/contact/b2c3d4e5-f6a7-8901-bcde-f12345678901",
+							"host": ["{{baseUrl}}"],
+							"path": ["contact", "b2c3d4e5-f6a7-8901-bcde-f12345678901"]
+						},
+						"description": "Get contact information for Jane Smith"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Contact - Bob Johnson",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/contact/c3d4e5f6-a7b8-9012-cdef-123456789012",
+							"host": ["{{baseUrl}}"],
+							"path": ["contact", "c3d4e5f6-a7b8-9012-cdef-123456789012"]
+						},
+						"description": "Get contact information for Bob Johnson"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Contact - Alice Williams",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/contact/d4e5f6a7-b8c9-0123-def1-234567890123",
+							"host": ["{{baseUrl}}"],
+							"path": ["contact", "d4e5f6a7-b8c9-0123-def1-234567890123"]
+						},
+						"description": "Get contact information for Alice Williams"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Contact - By Variable",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/contact/{{contactId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["contact", "{{contactId}}"]
+						},
+						"description": "Get contact using the contactId environment variable"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Contact - Not Found",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/contact/non-existent-uuid",
+							"host": ["{{baseUrl}}"],
+							"path": ["contact", "non-existent-uuid"]
+						},
+						"description": "Test 404 response for non-existent contact"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Enrichment",
+			"item": [
+				{
+					"name": "Start Enrichment",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.id) {",
+									"    pm.environment.set('enrichmentId', jsonData.id);",
+									"    console.log('Saved enrichmentId:', jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"userId\": \"{{contactId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/enrichment/start",
+							"host": ["{{baseUrl}}"],
+							"path": ["enrichment", "start"]
+						},
+						"description": "Start a new enrichment process. The enrichmentId is automatically saved to the environment for use in subsequent requests."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Enrichment Status (Dynamic)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/enrichment/{{enrichmentId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["enrichment", "{{enrichmentId}}"]
+						},
+						"description": "Get the status of the enrichment that was started. Poll this endpoint to watch the status change from pending -> in_progress -> completed."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Enrichment - Static Pending",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/enrichment/{{staticEnrichmentPending}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["enrichment", "{{staticEnrichmentPending}}"]
+						},
+						"description": "Get the static pending enrichment (never changes state)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Enrichment - Static In Progress",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/enrichment/{{staticEnrichmentInProgress}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["enrichment", "{{staticEnrichmentInProgress}}"]
+						},
+						"description": "Get the static in_progress enrichment (never changes state)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Enrichment - Static Completed",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/enrichment/{{staticEnrichmentCompleted}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["enrichment", "{{staticEnrichmentCompleted}}"]
+						},
+						"description": "Get the static completed enrichment with result data (never changes state)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Enrichment - Static Failed",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/enrichment/{{staticEnrichmentFailed}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["enrichment", "{{staticEnrichmentFailed}}"]
+						},
+						"description": "Get the static failed enrichment (never changes state)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Third Party",
+			"item": [
+				{
+					"name": "Get Third Party - John Doe",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/thirdparty/John%20Doe",
+							"host": ["{{baseUrl}}"],
+							"path": ["thirdparty", "John%20Doe"]
+						},
+						"description": "Get third-party information for John Doe"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Third Party - Jane Smith",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/thirdparty/Jane%20Smith",
+							"host": ["{{baseUrl}}"],
+							"path": ["thirdparty", "Jane%20Smith"]
+						},
+						"description": "Get third-party information for Jane Smith"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Third Party - Bob Johnson",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/thirdparty/Bob%20Johnson",
+							"host": ["{{baseUrl}}"],
+							"path": ["thirdparty", "Bob%20Johnson"]
+						},
+						"description": "Get third-party information for Bob Johnson"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Third Party - Alice Williams",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/thirdparty/Alice%20Williams",
+							"host": ["{{baseUrl}}"],
+							"path": ["thirdparty", "Alice%20Williams"]
+						},
+						"description": "Get third-party information for Alice Williams"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Third Party - Not Found",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/thirdparty/Unknown%20Person",
+							"host": ["{{baseUrl}}"],
+							"path": ["thirdparty", "Unknown%20Person"]
+						},
+						"description": "Test 404 response for non-existent person"
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
