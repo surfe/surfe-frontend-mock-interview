@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -36,6 +37,12 @@ type MockData struct {
 	Contacts   map[string]models.Contact
 	ThirdParty map[string]models.ThirdPartyInfo
 	Providers  map[string]models.Provider
+	// EnrichmentData stores phone/email values that can be "found" by providers
+	// Key is contact ID, value contains phone and email that providers can discover
+	EnrichmentData map[string]struct {
+		Phone string
+		Email string
+	}
 }
 
 // NewMockData initializes the mock data store with sample data
@@ -44,6 +51,10 @@ func NewMockData() *MockData {
 		Contacts:   make(map[string]models.Contact),
 		ThirdParty: make(map[string]models.ThirdPartyInfo),
 		Providers:  make(map[string]models.Provider),
+		EnrichmentData: make(map[string]struct {
+			Phone string
+			Email string
+		}),
 	}
 
 	// ============================================
@@ -53,39 +64,72 @@ func NewMockData() *MockData {
 		ID:        ContactJohnDoe,
 		FirstName: "John",
 		LastName:  "Doe",
-		Email:     "john.doe@example.com",
-		Phone:     "+1-555-123-4567",
 		Company:   "Acme Corp",
 		JobTitle:  "Software Engineer",
+		// Phone and Email will be populated through enrichment
 	}
 
 	md.Contacts[ContactJaneSmith] = models.Contact{
 		ID:        ContactJaneSmith,
 		FirstName: "Jane",
 		LastName:  "Smith",
-		Email:     "jane.smith@techco.io",
-		Phone:     "+1-555-987-6543",
 		Company:   "TechCo",
 		JobTitle:  "Product Manager",
+		// Phone and Email will be populated through enrichment
 	}
 
 	md.Contacts[ContactBobJohnson] = models.Contact{
 		ID:        ContactBobJohnson,
 		FirstName: "Bob",
 		LastName:  "Johnson",
-		Email:     "bob.johnson@startup.dev",
 		Company:   "StartupDev",
 		JobTitle:  "CTO",
+		// Phone and Email will be populated through enrichment
 	}
 
 	md.Contacts[ContactAliceWilliams] = models.Contact{
 		ID:        ContactAliceWilliams,
 		FirstName: "Alice",
 		LastName:  "Williams",
-		Email:     "alice.w@bigcorp.com",
-		Phone:     "+1-555-456-7890",
 		Company:   "BigCorp Inc",
 		JobTitle:  "Sales Director",
+		// Phone and Email will be populated through enrichment
+	}
+
+	// ============================================
+	// ENRICHMENT DATA - Phone/Email values that providers can "find"
+	// These are the values that will be discovered during enrichment
+	// ============================================
+	md.EnrichmentData[ContactJohnDoe] = struct {
+		Phone string
+		Email string
+	}{
+		Phone: "+1-555-123-4567",
+		Email: "john.doe@example.com",
+	}
+
+	md.EnrichmentData[ContactJaneSmith] = struct {
+		Phone string
+		Email string
+	}{
+		Phone: "+1-555-987-6543",
+		Email: "jane.smith@techco.io",
+	}
+
+	md.EnrichmentData[ContactBobJohnson] = struct {
+		Phone string
+		Email string
+	}{
+		Phone: "+1-555-234-5678",
+		Email: "bob.johnson@startup.dev",
+	}
+
+	md.EnrichmentData[ContactAliceWilliams] = struct {
+		Phone string
+		Email string
+	}{
+		Phone: "+1-555-456-7890",
+		Email: "alice.w@bigcorp.com",
 	}
 
 	// ============================================
@@ -209,4 +253,41 @@ func (md *MockData) GetProvider(id string) (models.Provider, bool) {
 	defer md.mu.RUnlock()
 	provider, exists := md.Providers[id]
 	return provider, exists
+}
+
+// GetEnrichmentData retrieves the phone/email data that can be found for a contact
+func (md *MockData) GetEnrichmentData(contactID string) (phone, email string, exists bool) {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+	data, exists := md.EnrichmentData[contactID]
+	if exists {
+		return data.Phone, data.Email, true
+	}
+	return "", "", false
+}
+
+// UpdateContactPhone updates a contact's phone number
+func (md *MockData) UpdateContactPhone(contactID, phone string) error {
+	md.mu.Lock()
+	defer md.mu.Unlock()
+	contact, exists := md.Contacts[contactID]
+	if !exists {
+		return fmt.Errorf("contact not found: %s", contactID)
+	}
+	contact.Phone = phone
+	md.Contacts[contactID] = contact
+	return nil
+}
+
+// UpdateContactEmail updates a contact's email
+func (md *MockData) UpdateContactEmail(contactID, email string) error {
+	md.mu.Lock()
+	defer md.mu.Unlock()
+	contact, exists := md.Contacts[contactID]
+	if !exists {
+		return fmt.Errorf("contact not found: %s", contactID)
+	}
+	contact.Email = email
+	md.Contacts[contactID] = contact
+	return nil
 }

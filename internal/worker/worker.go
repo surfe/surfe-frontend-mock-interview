@@ -178,18 +178,8 @@ func (w *Worker) processEnrichmentThroughProviders(enrichmentID, userID string) 
 		return
 	}
 
-	// Get current result
-	enrichment, err := w.db.GetEnrichment(enrichmentID)
-	if err != nil {
-		log.Printf("Error getting enrichment %s: %v", enrichmentID, err)
-		return
-	}
-	result := &models.EnrichmentResult{}
-	if enrichment != nil && enrichment.Result != nil {
-		result = enrichment.Result
-	}
-
 	// Set missing values to empty strings and mark as completed
+	// Each job type updates only its own field using UpdateEnrichmentResultField
 	if needsPhone {
 		phoneCompleted := false
 		for _, completed := range completedJobs {
@@ -199,9 +189,11 @@ func (w *Worker) processEnrichmentThroughProviders(enrichmentID, userID string) 
 			}
 		}
 		if !phoneCompleted {
-			// Phone was requested but not found, set to empty string
-			result.Phone = ""
+			// Phone was requested but not found, set to empty string using field-specific update
 			log.Printf("Phone job not found after checking all providers, setting to empty string for enrichment %s", enrichmentID)
+			if err := w.db.UpdateEnrichmentResultField(enrichmentID, "phone", ""); err != nil {
+				log.Printf("Error setting empty phone for enrichment %s: %v", enrichmentID, err)
+			}
 			// Mark as completed (even though empty)
 			if err := w.db.AddCompletedJob(enrichmentID, "phone"); err != nil {
 				log.Printf("Error marking phone as completed for enrichment %s: %v", enrichmentID, err)
@@ -218,9 +210,11 @@ func (w *Worker) processEnrichmentThroughProviders(enrichmentID, userID string) 
 			}
 		}
 		if !emailCompleted {
-			// Email was requested but not found, set to empty string
-			result.Email = ""
+			// Email was requested but not found, set to empty string using field-specific update
 			log.Printf("Email job not found after checking all providers, setting to empty string for enrichment %s", enrichmentID)
+			if err := w.db.UpdateEnrichmentResultField(enrichmentID, "email", ""); err != nil {
+				log.Printf("Error setting empty email for enrichment %s: %v", enrichmentID, err)
+			}
 			// Mark as completed (even though empty)
 			if err := w.db.AddCompletedJob(enrichmentID, "email"); err != nil {
 				log.Printf("Error marking email as completed for enrichment %s: %v", enrichmentID, err)
@@ -228,20 +222,17 @@ func (w *Worker) processEnrichmentThroughProviders(enrichmentID, userID string) 
 		}
 	}
 
-	// Complete the enrichment with final result (may include empty strings for missing values)
-	enrichment, err = w.db.GetEnrichment(enrichmentID)
+	// Complete the enrichment - status will be set to completed by AddCompletedJob when all jobs are done
+	// No need to update result here since each job type already updated its own field using UpdateEnrichmentResultField
+	enrichment, err := w.db.GetEnrichment(enrichmentID)
 	if err != nil {
 		log.Printf("Error checking enrichment %s status: %v", enrichmentID, err)
 		return
 	}
+
+	// If not already completed, it will be completed by AddCompletedJob when the last job finishes
 	if enrichment != nil && enrichment.Status != models.EnrichmentStatusCompleted {
-		log.Printf("All providers checked for enrichment %s, completing enrichment", enrichmentID)
-		// Clear providers when completed
-		w.db.UpdateEnrichmentStatusWithJobProvider(enrichmentID, models.EnrichmentStatusCompleted, result, nil, "")
-	} else {
-		// Already completed by AddCompletedJob, but ensure result is saved with empty strings
-		log.Printf("All providers checked for enrichment %s, updating result with final values", enrichmentID)
-		w.db.UpdateEnrichmentStatusWithJobProvider(enrichmentID, models.EnrichmentStatusCompleted, result, nil, "")
+		log.Printf("All providers checked for enrichment %s, waiting for final job completion", enrichmentID)
 	}
 }
 
@@ -311,57 +302,64 @@ func (w *Worker) processJobForEnrichment(enrichmentID string, contact models.Con
 		if rand.Float32() < 0.3 {
 			found = true
 			var value string
+			// Get enrichment data (phone/email that can be found)
+			enrichmentPhone, enrichmentEmail, hasData := w.mockData.GetEnrichmentData(contact.ID)
+
 			if jobType == "phone" {
-				if contact.Phone != "" {
-					value = contact.Phone
+				if hasData && enrichmentPhone != "" {
+					value = enrichmentPhone
 					log.Printf("Provider %s found phone number for enrichment %s", provider.Name, enrichmentID)
 				} else {
-					log.Printf("Provider %s would have found phone but contact has no phone number", provider.Name)
+					log.Printf("Provider %s would have found phone but no phone data available", provider.Name)
 					found = false
 				}
 			} else if jobType == "email" {
-				if contact.Email != "" {
-					value = contact.Email
+				if hasData && enrichmentEmail != "" {
+					value = enrichmentEmail
 					log.Printf("Provider %s found email for enrichment %s", provider.Name, enrichmentID)
 				} else {
-					log.Printf("Provider %s would have found email but contact has no email", provider.Name)
+					log.Printf("Provider %s would have found email but no email data available", provider.Name)
 					found = false
 				}
 			}
 
 			if found && value != "" {
-				// Get current result to preserve existing data
-				enrichment, err := w.db.GetEnrichment(enrichmentID)
-				if err != nil {
-					log.Printf("Error getting enrichment %s: %v", enrichmentID, err)
+				// Update only this job type's field in the result (preserves the other field)
+				if err := w.db.UpdateEnrichmentResultField(enrichmentID, jobType, value); err != nil {
+					log.Printf("Error updating %s result for enrichment %s: %v", jobType, enrichmentID, err)
 					continue
 				}
-				result := &models.EnrichmentResult{}
-				if enrichment != nil && enrichment.Result != nil {
-					result = enrichment.Result
+
+				// Update the provider ID for this job type
+				if err := w.db.UpdateEnrichmentStatusWithJobProvider(enrichmentID, models.EnrichmentStatusInProgress, nil, &provider.ID, jobType); err != nil {
+					log.Printf("Error updating provider for enrichment %s: %v", enrichmentID, err)
+					continue
 				}
 
-				// Update the result with the found value
+				// Update contact with found value
 				if jobType == "phone" {
-					result.Phone = value
+					if err := w.mockData.UpdateContactPhone(contact.ID, value); err != nil {
+						log.Printf("Error updating contact phone for enrichment %s: %v", enrichmentID, err)
+					} else {
+						log.Printf("Updated contact %s with phone number: %s", contact.ID, value)
+					}
 				} else if jobType == "email" {
-					result.Email = value
+					if err := w.mockData.UpdateContactEmail(contact.ID, value); err != nil {
+						log.Printf("Error updating contact email for enrichment %s: %v", enrichmentID, err)
+					} else {
+						log.Printf("Updated contact %s with email: %s", contact.ID, value)
+					}
 				}
 
-				// Save the result immediately for this job type
-				if err := w.db.UpdateEnrichmentStatusWithJobProvider(enrichmentID, models.EnrichmentStatusInProgress, result, &provider.ID, jobType); err != nil {
-					log.Printf("Error updating result for enrichment %s: %v", enrichmentID, err)
-					continue
-				}
-
-				// Mark job as completed
+				// Mark job as completed (after result and contact are updated)
+				// This will read the latest result from DB, so it should have our value
 				if err := w.db.AddCompletedJob(enrichmentID, jobType); err != nil {
 					log.Printf("Error marking %s as completed for enrichment %s: %v", jobType, enrichmentID, err)
 					continue
 				}
 
-				// Clear provider ID since job is completed
-				if err := w.db.UpdateEnrichmentStatusWithJobProvider(enrichmentID, models.EnrichmentStatusInProgress, result, nil, jobType); err != nil {
+				// Clear provider ID since job is completed (result is already saved)
+				if err := w.db.UpdateEnrichmentStatusWithJobProvider(enrichmentID, models.EnrichmentStatusInProgress, nil, nil, jobType); err != nil {
 					log.Printf("Error clearing provider for completed %s job in enrichment %s: %v", jobType, enrichmentID, err)
 				}
 

@@ -432,6 +432,54 @@ func (db *DB) UpdateEnrichmentStatusWithProvider(id string, status models.Enrich
 	return db.UpdateEnrichmentStatusWithJobProvider(id, status, result, providerID, "")
 }
 
+// UpdateEnrichmentResultField updates only a specific field (phone or email) in the result JSON
+// This ensures each job type only updates its own field without overwriting the other
+func (db *DB) UpdateEnrichmentResultField(id string, fieldName string, value string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Get current result
+	enrichment, err := db.GetEnrichment(id)
+	if err != nil {
+		return fmt.Errorf("failed to get enrichment: %w", err)
+	}
+
+	// Create or update result
+	result := &models.EnrichmentResult{}
+	if enrichment != nil && enrichment.Result != nil {
+		// Preserve existing values
+		result.Phone = enrichment.Result.Phone
+		result.Email = enrichment.Result.Email
+	}
+
+	// Update only the specified field
+	if fieldName == "phone" {
+		result.Phone = value
+	} else if fieldName == "email" {
+		result.Email = value
+	} else {
+		return fmt.Errorf("invalid field name: %s (must be 'phone' or 'email')", fieldName)
+	}
+
+	// Marshal the updated result
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("failed to marshal result: %w", err)
+	}
+	resultJSON := string(data)
+
+	// Update only the result field, preserving everything else
+	_, err = db.conn.Exec(`
+		UPDATE enrichments
+		SET updated_at = ?, result = ?
+		WHERE id = ?
+	`, now, resultJSON, id)
+	if err != nil {
+		return fmt.Errorf("failed to update enrichment result: %w", err)
+	}
+
+	return nil
+}
+
 // UpdateEnrichmentStatusWithJobProvider updates the status, result, and provider for a specific job type
 func (db *DB) UpdateEnrichmentStatusWithJobProvider(id string, status models.EnrichmentStatus, result *models.EnrichmentResult, providerID *string, jobType string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -450,18 +498,18 @@ func (db *DB) UpdateEnrichmentStatusWithJobProvider(id string, status models.Enr
 	if jobType == "phone" {
 		_, err := db.conn.Exec(`
 			UPDATE enrichments
-			SET status = ?, updated_at = ?, result = ?, phone_provider_id = ?
+			SET status = ?, updated_at = ?, phone_provider_id = ?
 			WHERE id = ?
-		`, status, now, resultJSON, providerID, id)
+		`, status, now, providerID, id)
 		if err != nil {
 			return fmt.Errorf("failed to update enrichment: %w", err)
 		}
 	} else if jobType == "email" {
 		_, err := db.conn.Exec(`
 			UPDATE enrichments
-			SET status = ?, updated_at = ?, result = ?, email_provider_id = ?
+			SET status = ?, updated_at = ?, email_provider_id = ?
 			WHERE id = ?
-		`, status, now, resultJSON, providerID, id)
+		`, status, now, providerID, id)
 		if err != nil {
 			return fmt.Errorf("failed to update enrichment: %w", err)
 		}
