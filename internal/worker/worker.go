@@ -18,6 +18,9 @@ type Config struct {
 
 	// PendingToInProgressDelay is how long an enrichment stays pending before moving to in_progress
 	PendingToInProgressDelay time.Duration
+
+	// ProviderSuccessRate is the probability (0.0 to 1.0) that a provider will find the requested value
+	ProviderSuccessRate float32
 }
 
 // DefaultConfig returns the default worker configuration
@@ -25,6 +28,7 @@ func DefaultConfig() Config {
 	return Config{
 		PollInterval:             10 * time.Second,
 		PendingToInProgressDelay: 10 * time.Second, // Move to in_progress after 10s
+		ProviderSuccessRate:      0.2,              // 20% chance of finding the value
 	}
 }
 
@@ -297,9 +301,9 @@ func (w *Worker) processJobForEnrichment(enrichmentID string, contact models.Con
 		delay := 4*time.Second + time.Duration(rand.Intn(2001))*time.Millisecond
 		time.Sleep(delay)
 
-		// Check if this provider finds the requested data (30% chance)
+		// Check if this provider finds the requested data
 		found := false
-		if rand.Float32() < 0.3 {
+		if rand.Float32() < w.config.ProviderSuccessRate {
 			found = true
 			var value string
 			// Get enrichment data (phone/email that can be found)
