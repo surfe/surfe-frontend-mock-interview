@@ -39,11 +39,13 @@ type EnrichmentResult struct {
 	Skills      []string `json:"skills,omitempty"`
 	Experience  int      `json:"experienceYears,omitempty"`
 	Phone       string   `json:"phone,omitempty"`
+	Email       string   `json:"email,omitempty"`
 }
 
 // EnrichmentStartRequest is the payload for starting an enrichment
 type EnrichmentStartRequest struct {
 	UserID  string                 `json:"userId"`
+	Jobs    []string               `json:"jobs,omitempty"` // Array of "email" and/or "phone"
 	Options map[string]interface{} `json:"options,omitempty"`
 }
 

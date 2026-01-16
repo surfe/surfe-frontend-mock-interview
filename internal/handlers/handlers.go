@@ -75,7 +75,23 @@ func (h *Handler) StartEnrichment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enrichment, err := h.db.CreateEnrichment(req.UserID)
+	// Validate jobs if provided
+	jobs := req.Jobs
+	if len(jobs) > 0 {
+		validJobs := make([]string, 0, len(jobs))
+		for _, job := range jobs {
+			if job == "phone" || job == "email" {
+				validJobs = append(validJobs, job)
+			}
+		}
+		jobs = validJobs
+		if len(jobs) == 0 {
+			writeError(w, http.StatusBadRequest, "jobs must contain 'phone' and/or 'email'")
+			return
+		}
+	}
+
+	enrichment, err := h.db.CreateEnrichment(req.UserID, jobs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create enrichment")
 		return
