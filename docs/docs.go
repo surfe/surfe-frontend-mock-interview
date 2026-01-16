@@ -261,22 +261,7 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
-                "experienceYears": {
-                    "type": "integer"
-                },
-                "linkedInUrl": {
-                    "type": "string"
-                },
                 "phone": {
-                    "type": "string"
-                },
-                "skills": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "twitterUrl": {
                     "type": "string"
                 }
             }

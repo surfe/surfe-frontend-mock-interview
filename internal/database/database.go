@@ -562,10 +562,8 @@ func (db *DB) SeedStaticEnrichments() error {
 			UserID: "c3d4e5f6-a7b8-9012-cdef-123456789012", // Bob Johnson
 			Status: models.EnrichmentStatusCompleted,
 			Result: &models.EnrichmentResult{
-				LinkedInURL: "https://linkedin.com/in/bobjohnson",
-				TwitterURL:  "https://twitter.com/bob_johnson",
-				Skills:      []string{"Leadership", "Architecture", "Go", "Kubernetes"},
-				Experience:  12,
+				Phone: "+1-555-234-5678",
+				Email: "bob.johnson@startup.dev",
 			},
 		},
 		{

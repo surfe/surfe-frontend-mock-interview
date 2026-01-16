@@ -6,7 +6,7 @@ type Contact struct {
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	Email     string `json:"email"`
-	Phone     string `json:"phone,omitempty"`
+	Phone     string `json:"phone"`
 	Company   string `json:"company,omitempty"`
 	JobTitle  string `json:"jobTitle,omitempty"`
 }
@@ -43,12 +43,8 @@ type Enrichment struct {
 
 // EnrichmentResult contains the enriched data
 type EnrichmentResult struct {
-	LinkedInURL string   `json:"linkedInUrl,omitempty"`
-	TwitterURL  string   `json:"twitterUrl,omitempty"`
-	Skills      []string `json:"skills,omitempty"`
-	Experience  int      `json:"experienceYears,omitempty"`
-	Phone       string   `json:"phone,omitempty"`
-	Email       string   `json:"email,omitempty"`
+	Phone string `json:"phone,omitempty"`
+	Email string `json:"email,omitempty"`
 }
 
 // EnrichmentStartRequest is the payload for starting an enrichment
