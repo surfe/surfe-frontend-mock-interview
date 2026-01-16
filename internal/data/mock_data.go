@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -17,12 +18,31 @@ const (
 	ContactAliceWilliams = "d4e5f6a7-b8c9-0123-def1-234567890123"
 )
 
+// ============================================
+// PROVIDER UUIDs - Use these in your frontend
+// ============================================
+const (
+	ProviderAcmeCorp        = "e5f6a7b8-c9d0-1234-efab-345678901234"
+	ProviderTechCo          = "f6a7b8c9-d0e1-2345-fabc-456789012345"
+	ProviderStartupDev      = "a7b8c9d0-e1f2-3456-abcd-567890123456"
+	ProviderBigCorpInc      = "b8c9d0e1-f2a3-4567-bcde-678901234567"
+	ProviderCloudSync       = "c9d0e1f2-a3b4-5678-cdef-789012345678"
+	ProviderDataFlowSystems = "d0e1f2a3-b4c5-6789-defa-890123456789"
+)
+
 // MockData holds all the mock data for the API
 // Edit this file to update mock responses
 type MockData struct {
 	mu         sync.RWMutex
 	Contacts   map[string]models.Contact
 	ThirdParty map[string]models.ThirdPartyInfo
+	Providers  map[string]models.Provider
+	// EnrichmentData stores phone/email values that can be "found" by providers
+	// Key is contact ID, value contains phone and email that providers can discover
+	EnrichmentData map[string]struct {
+		Phone string
+		Email string
+	}
 }
 
 // NewMockData initializes the mock data store with sample data
@@ -30,6 +50,11 @@ func NewMockData() *MockData {
 	md := &MockData{
 		Contacts:   make(map[string]models.Contact),
 		ThirdParty: make(map[string]models.ThirdPartyInfo),
+		Providers:  make(map[string]models.Provider),
+		EnrichmentData: make(map[string]struct {
+			Phone string
+			Email string
+		}),
 	}
 
 	// ============================================
@@ -39,39 +64,72 @@ func NewMockData() *MockData {
 		ID:        ContactJohnDoe,
 		FirstName: "John",
 		LastName:  "Doe",
-		Email:     "john.doe@example.com",
-		Phone:     "+1-555-123-4567",
 		Company:   "Acme Corp",
 		JobTitle:  "Software Engineer",
+		// Phone and Email will be populated through enrichment
 	}
 
 	md.Contacts[ContactJaneSmith] = models.Contact{
 		ID:        ContactJaneSmith,
 		FirstName: "Jane",
 		LastName:  "Smith",
-		Email:     "jane.smith@techco.io",
-		Phone:     "+1-555-987-6543",
 		Company:   "TechCo",
 		JobTitle:  "Product Manager",
+		// Phone and Email will be populated through enrichment
 	}
 
 	md.Contacts[ContactBobJohnson] = models.Contact{
 		ID:        ContactBobJohnson,
 		FirstName: "Bob",
 		LastName:  "Johnson",
-		Email:     "bob.johnson@startup.dev",
 		Company:   "StartupDev",
 		JobTitle:  "CTO",
+		// Phone and Email will be populated through enrichment
 	}
 
 	md.Contacts[ContactAliceWilliams] = models.Contact{
 		ID:        ContactAliceWilliams,
 		FirstName: "Alice",
 		LastName:  "Williams",
-		Email:     "alice.w@bigcorp.com",
-		Phone:     "+1-555-456-7890",
 		Company:   "BigCorp Inc",
 		JobTitle:  "Sales Director",
+		// Phone and Email will be populated through enrichment
+	}
+
+	// ============================================
+	// ENRICHMENT DATA - Phone/Email values that providers can "find"
+	// These are the values that will be discovered during enrichment
+	// ============================================
+	md.EnrichmentData[ContactJohnDoe] = struct {
+		Phone string
+		Email string
+	}{
+		Phone: "+1-555-123-4567",
+		Email: "john.doe@example.com",
+	}
+
+	md.EnrichmentData[ContactJaneSmith] = struct {
+		Phone string
+		Email string
+	}{
+		Phone: "+1-555-987-6543",
+		Email: "jane.smith@techco.io",
+	}
+
+	md.EnrichmentData[ContactBobJohnson] = struct {
+		Phone string
+		Email string
+	}{
+		Phone: "+1-555-234-5678",
+		Email: "bob.johnson@startup.dev",
+	}
+
+	md.EnrichmentData[ContactAliceWilliams] = struct {
+		Phone string
+		Email string
+	}{
+		Phone: "+1-555-456-7890",
+		Email: "alice.w@bigcorp.com",
 	}
 
 	// ============================================
@@ -111,13 +169,52 @@ func NewMockData() *MockData {
 	}
 
 	md.ThirdParty["alice williams"] = models.ThirdPartyInfo{
-		FullName:       "Alice Williams",
-		LinkedInURL:    "https://linkedin.com/in/alicewilliams",
-		TwitterHandle:  "@alice_sales",
-		Bio:            "Enterprise sales expert with a track record of success",
-		Location:       "Chicago, IL",
-		Skills:         []string{"Enterprise Sales", "Negotiation", "CRM"},
-		Companies:      []string{"BigCorp Inc", "Salesforce", "HubSpot"},
+		FullName:      "Alice Williams",
+		LinkedInURL:   "https://linkedin.com/in/alicewilliams",
+		TwitterHandle: "@alice_sales",
+		Bio:           "Enterprise sales expert with a track record of success",
+		Location:      "Chicago, IL",
+		Skills:        []string{"Enterprise Sales", "Negotiation", "CRM"},
+		Companies:     []string{"BigCorp Inc", "Salesforce", "HubSpot"},
+	}
+
+	// ============================================
+	// PROVIDERS - Edit here to add/modify providers
+	// ============================================
+	md.Providers[ProviderAcmeCorp] = models.Provider{
+		ID:       ProviderAcmeCorp,
+		Name:     "Acme Corp",
+		ImageURL: "https://acme-corp.com/logo.png",
+	}
+
+	md.Providers[ProviderTechCo] = models.Provider{
+		ID:       ProviderTechCo,
+		Name:     "TechCo",
+		ImageURL: "https://techco.io/logo.png",
+	}
+
+	md.Providers[ProviderStartupDev] = models.Provider{
+		ID:       ProviderStartupDev,
+		Name:     "StartupDev",
+		ImageURL: "https://startup.dev/logo.png",
+	}
+
+	md.Providers[ProviderBigCorpInc] = models.Provider{
+		ID:       ProviderBigCorpInc,
+		Name:     "BigCorp Inc",
+		ImageURL: "https://bigcorp.com/logo.png",
+	}
+
+	md.Providers[ProviderCloudSync] = models.Provider{
+		ID:       ProviderCloudSync,
+		Name:     "CloudSync",
+		ImageURL: "https://cloudsync.io/logo.png",
+	}
+
+	md.Providers[ProviderDataFlowSystems] = models.Provider{
+		ID:       ProviderDataFlowSystems,
+		Name:     "DataFlow Systems",
+		ImageURL: "https://dataflow.com/logo.png",
 	}
 
 	return md
@@ -137,4 +234,60 @@ func (md *MockData) GetThirdPartyInfo(fullName string) (models.ThirdPartyInfo, b
 	defer md.mu.RUnlock()
 	info, exists := md.ThirdParty[strings.ToLower(fullName)]
 	return info, exists
+}
+
+// GetAllProviders retrieves all providers
+func (md *MockData) GetAllProviders() []models.Provider {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+	providers := make([]models.Provider, 0, len(md.Providers))
+	for _, provider := range md.Providers {
+		providers = append(providers, provider)
+	}
+	return providers
+}
+
+// GetProvider retrieves a provider by ID
+func (md *MockData) GetProvider(id string) (models.Provider, bool) {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+	provider, exists := md.Providers[id]
+	return provider, exists
+}
+
+// GetEnrichmentData retrieves the phone/email data that can be found for a contact
+func (md *MockData) GetEnrichmentData(contactID string) (phone, email string, exists bool) {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+	data, exists := md.EnrichmentData[contactID]
+	if exists {
+		return data.Phone, data.Email, true
+	}
+	return "", "", false
+}
+
+// UpdateContactPhone updates a contact's phone number
+func (md *MockData) UpdateContactPhone(contactID, phone string) error {
+	md.mu.Lock()
+	defer md.mu.Unlock()
+	contact, exists := md.Contacts[contactID]
+	if !exists {
+		return fmt.Errorf("contact not found: %s", contactID)
+	}
+	contact.Phone = phone
+	md.Contacts[contactID] = contact
+	return nil
+}
+
+// UpdateContactEmail updates a contact's email
+func (md *MockData) UpdateContactEmail(contactID, email string) error {
+	md.mu.Lock()
+	defer md.mu.Unlock()
+	contact, exists := md.Contacts[contactID]
+	if !exists {
+		return fmt.Errorf("contact not found: %s", contactID)
+	}
+	contact.Email = email
+	md.Contacts[contactID] = contact
+	return nil
 }

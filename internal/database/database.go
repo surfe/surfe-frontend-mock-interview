@@ -30,22 +30,56 @@ func New(dbPath string) (*DB, error) {
 		}
 	}
 
+	// For in-memory databases, use shared cache mode so all connections share the same database
+	// This is important because :memory: creates a separate database per connection by default
+	if dbPath == ":memory:" {
+		dbPath = "file::memory:?cache=shared"
+	}
+
 	conn, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Set connection pool settings for in-memory databases
+	// Use a single connection for in-memory to ensure consistency
+	if dbPath == "file::memory:?cache=shared" || dbPath == ":memory:" {
+		conn.SetMaxOpenConns(1)
+		conn.SetMaxIdleConns(1)
+	}
+
+	// Test the connection with a simple query
+	if _, err := conn.Exec("SELECT 1"); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to test database connection: %w", err)
+	}
+
 	db := &DB{conn: conn}
 
 	if err := db.migrate(); err != nil {
+		conn.Close()
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
+
+	// Verify migration by checking if we can query the table
+	var count int
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM enrichments").Scan(&count); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to verify enrichments table after migration: %w", err)
+	}
+
+	log.Printf("Database initialized successfully with %d enrichments", count)
 
 	return db, nil
 }
 
 // migrate creates the database schema
 func (db *DB) migrate() error {
+	// Enable foreign keys and other SQLite settings
+	if _, err := db.conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return fmt.Errorf("failed to set foreign keys: %w", err)
+	}
+
 	schema := `
 	CREATE TABLE IF NOT EXISTS enrichments (
 		id TEXT PRIMARY KEY,
@@ -54,6 +88,12 @@ func (db *DB) migrate() error {
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL,
 		result TEXT,
+		current_provider_id TEXT,
+		phone_provider_id TEXT,
+		email_provider_id TEXT,
+		jobs TEXT,
+		completed_jobs TEXT,
+		contact_info TEXT,
 		is_static INTEGER DEFAULT 0
 	);
 
@@ -61,8 +101,33 @@ func (db *DB) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_enrichments_created_at ON enrichments(created_at);
 	`
 
-	_, err := db.conn.Exec(schema)
-	return err
+	if _, err := db.conn.Exec(schema); err != nil {
+		return fmt.Errorf("failed to create enrichments table: %w", err)
+	}
+
+	// Verify table was created
+	var tableName string
+	err := db.conn.QueryRow(`
+		SELECT name FROM sqlite_master 
+		WHERE type='table' AND name='enrichments'
+	`).Scan(&tableName)
+	if err != nil {
+		return fmt.Errorf("failed to verify enrichments table exists: %w", err)
+	}
+
+	log.Printf("Database migration successful: enrichments table created")
+
+	// Add columns if they don't exist (for existing databases)
+	// SQLite doesn't support IF NOT EXISTS for ALTER TABLE ADD COLUMN,
+	// so we ignore errors if columns already exist
+	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN current_provider_id TEXT`)
+	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN phone_provider_id TEXT`)
+	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN email_provider_id TEXT`)
+	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN jobs TEXT`)
+	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN completed_jobs TEXT`)
+	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN contact_info TEXT`)
+
+	return nil
 }
 
 // Close closes the database connection
@@ -71,7 +136,7 @@ func (db *DB) Close() error {
 }
 
 // CreateEnrichment creates a new enrichment record
-func (db *DB) CreateEnrichment(userID string) (*models.Enrichment, error) {
+func (db *DB) CreateEnrichment(userID string, jobs []string, contactInfo *models.EnrichmentContactInfo) (*models.Enrichment, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -83,10 +148,32 @@ func (db *DB) CreateEnrichment(userID string) (*models.Enrichment, error) {
 		UpdatedAt: now,
 	}
 
-	_, err := db.conn.Exec(`
-		INSERT INTO enrichments (id, user_id, status, created_at, updated_at, is_static)
-		VALUES (?, ?, ?, ?, ?, 0)
-	`, enrichment.ID, enrichment.UserID, enrichment.Status, enrichment.CreatedAt, enrichment.UpdatedAt)
+	// Default to phone if no jobs specified
+	if len(jobs) == 0 {
+		jobs = []string{"phone"}
+	}
+
+	// Marshal jobs to JSON
+	jobsJSON, err := json.Marshal(jobs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal jobs: %w", err)
+	}
+
+	// Marshal contact info to JSON if provided
+	var contactInfoJSON *string
+	if contactInfo != nil {
+		contactData, err := json.Marshal(contactInfo)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal contact info: %w", err)
+		}
+		s := string(contactData)
+		contactInfoJSON = &s
+	}
+
+	_, err = db.conn.Exec(`
+		INSERT INTO enrichments (id, user_id, status, created_at, updated_at, current_provider_id, phone_provider_id, email_provider_id, jobs, completed_jobs, contact_info, is_static)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+	`, enrichment.ID, enrichment.UserID, enrichment.Status, enrichment.CreatedAt, enrichment.UpdatedAt, nil, nil, nil, string(jobsJSON), "[]", contactInfoJSON)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create enrichment: %w", err)
@@ -99,12 +186,17 @@ func (db *DB) CreateEnrichment(userID string) (*models.Enrichment, error) {
 func (db *DB) GetEnrichment(id string) (*models.Enrichment, error) {
 	var enrichment models.Enrichment
 	var resultJSON sql.NullString
+	var currentProviderID sql.NullString
+	var phoneProviderID sql.NullString
+	var emailProviderID sql.NullString
+	var jobsJSON sql.NullString
+	var completedJobsJSON sql.NullString
 
 	err := db.conn.QueryRow(`
-		SELECT id, user_id, status, created_at, updated_at, result
+		SELECT id, user_id, status, created_at, updated_at, result, current_provider_id, phone_provider_id, email_provider_id, jobs, completed_jobs
 		FROM enrichments
 		WHERE id = ?
-	`, id).Scan(&enrichment.ID, &enrichment.UserID, &enrichment.Status, &enrichment.CreatedAt, &enrichment.UpdatedAt, &resultJSON)
+	`, id).Scan(&enrichment.ID, &enrichment.UserID, &enrichment.Status, &enrichment.CreatedAt, &enrichment.UpdatedAt, &resultJSON, &currentProviderID, &phoneProviderID, &emailProviderID, &jobsJSON, &completedJobsJSON)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -121,7 +213,201 @@ func (db *DB) GetEnrichment(id string) (*models.Enrichment, error) {
 		enrichment.Result = &result
 	}
 
+	// Store provider IDs for handler to populate JobStatus objects
+	// The handler will populate the Phone and Email JobStatus objects
+	if phoneProviderID.Valid && phoneProviderID.String != "" {
+		// This will be used by the handler
+	}
+	if emailProviderID.Valid && emailProviderID.String != "" {
+		// This will be used by the handler
+	}
+
 	return &enrichment, nil
+}
+
+// GetEnrichmentContactInfo retrieves the contact info for an enrichment
+func (db *DB) GetEnrichmentContactInfo(id string) (*models.EnrichmentContactInfo, error) {
+	var contactInfoJSON sql.NullString
+
+	err := db.conn.QueryRow(`
+		SELECT contact_info
+		FROM enrichments
+		WHERE id = ?
+	`, id).Scan(&contactInfoJSON)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get enrichment contact info: %w", err)
+	}
+
+	if !contactInfoJSON.Valid || contactInfoJSON.String == "" {
+		return nil, nil
+	}
+
+	var contactInfo models.EnrichmentContactInfo
+	if err := json.Unmarshal([]byte(contactInfoJSON.String), &contactInfo); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal contact info: %w", err)
+	}
+
+	return &contactInfo, nil
+}
+
+// GetEnrichmentWithProviders retrieves an enrichment with provider IDs for phone and email
+func (db *DB) GetEnrichmentWithProviders(id string) (*models.Enrichment, *string, *string, error) {
+	enrichment, err := db.GetEnrichment(id)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if enrichment == nil {
+		return nil, nil, nil, nil
+	}
+
+	var phoneProviderID sql.NullString
+	var emailProviderID sql.NullString
+
+	err = db.conn.QueryRow(`
+		SELECT phone_provider_id, email_provider_id
+		FROM enrichments
+		WHERE id = ?
+	`, id).Scan(&phoneProviderID, &emailProviderID)
+
+	if err != nil && err != sql.ErrNoRows {
+		return nil, nil, nil, fmt.Errorf("failed to get provider IDs: %w", err)
+	}
+
+	var phoneProviderIDPtr *string
+	var emailProviderIDPtr *string
+
+	if phoneProviderID.Valid && phoneProviderID.String != "" {
+		phoneProviderIDPtr = &phoneProviderID.String
+	}
+	if emailProviderID.Valid && emailProviderID.String != "" {
+		emailProviderIDPtr = &emailProviderID.String
+	}
+
+	return enrichment, phoneProviderIDPtr, emailProviderIDPtr, nil
+}
+
+// GetEnrichmentJobs retrieves the jobs and completed jobs for an enrichment
+func (db *DB) GetEnrichmentJobs(id string) ([]string, []string, error) {
+	var jobsJSON sql.NullString
+	var completedJobsJSON sql.NullString
+
+	err := db.conn.QueryRow(`
+		SELECT jobs, completed_jobs
+		FROM enrichments
+		WHERE id = ?
+	`, id).Scan(&jobsJSON, &completedJobsJSON)
+
+	if err == sql.ErrNoRows {
+		return nil, nil, fmt.Errorf("enrichment not found")
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get enrichment jobs: %w", err)
+	}
+
+	var jobs []string
+	if jobsJSON.Valid && jobsJSON.String != "" {
+		if err := json.Unmarshal([]byte(jobsJSON.String), &jobs); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal jobs: %w", err)
+		}
+	} else {
+		// Default to phone for backward compatibility
+		jobs = []string{"phone"}
+	}
+
+	var completedJobs []string
+	if completedJobsJSON.Valid && completedJobsJSON.String != "" {
+		if err := json.Unmarshal([]byte(completedJobsJSON.String), &completedJobs); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal completed jobs: %w", err)
+		}
+	}
+
+	return jobs, completedJobs, nil
+}
+
+// AddCompletedJob adds a job to the completed jobs list
+func (db *DB) AddCompletedJob(enrichmentID, job string) error {
+	jobs, completedJobs, err := db.GetEnrichmentJobs(enrichmentID)
+	if err != nil {
+		return err
+	}
+
+	// Check if job is already completed
+	for _, completed := range completedJobs {
+		if completed == job {
+			return nil // Already completed
+		}
+	}
+
+	// Add to completed jobs
+	completedJobs = append(completedJobs, job)
+
+	// Check if all jobs are completed
+	allCompleted := true
+	for _, job := range jobs {
+		found := false
+		for _, completed := range completedJobs {
+			if completed == job {
+				found = true
+				break
+			}
+		}
+		if !found {
+			allCompleted = false
+			break
+		}
+	}
+
+	// Marshal completed jobs
+	completedJobsJSON, err := json.Marshal(completedJobs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal completed jobs: %w", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Update the enrichment
+	if allCompleted {
+		// Get current result to preserve it
+		enrichment, err := db.GetEnrichment(enrichmentID)
+		if err != nil {
+			return err
+		}
+
+		var resultJSON *string
+		if enrichment != nil && enrichment.Result != nil {
+			data, err := json.Marshal(enrichment.Result)
+			if err != nil {
+				return fmt.Errorf("failed to marshal result: %w", err)
+			}
+			s := string(data)
+			resultJSON = &s
+		}
+
+		// When all jobs are completed, clear all provider IDs
+		_, err = db.conn.Exec(`
+			UPDATE enrichments
+			SET status = ?, updated_at = ?, completed_jobs = ?, current_provider_id = ?, phone_provider_id = ?, email_provider_id = ?, result = ?
+			WHERE id = ?
+		`, models.EnrichmentStatusCompleted, now, string(completedJobsJSON), nil, nil, nil, resultJSON, enrichmentID)
+		if err != nil {
+			return fmt.Errorf("failed to update enrichment: %w", err)
+		}
+	} else {
+		_, err = db.conn.Exec(`
+			UPDATE enrichments
+			SET updated_at = ?, completed_jobs = ?
+			WHERE id = ?
+		`, now, string(completedJobsJSON), enrichmentID)
+		if err != nil {
+			return fmt.Errorf("failed to update enrichment: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // GetPendingEnrichments returns enrichments that are pending and older than the given duration
@@ -180,6 +466,64 @@ func (db *DB) GetInProgressEnrichments(olderThan time.Duration) ([]*models.Enric
 
 // UpdateEnrichmentStatus updates the status of an enrichment
 func (db *DB) UpdateEnrichmentStatus(id string, status models.EnrichmentStatus, result *models.EnrichmentResult) error {
+	return db.UpdateEnrichmentStatusWithProvider(id, status, result, nil)
+}
+
+// UpdateEnrichmentStatusWithProvider updates the status and current provider of an enrichment
+func (db *DB) UpdateEnrichmentStatusWithProvider(id string, status models.EnrichmentStatus, result *models.EnrichmentResult, providerID *string) error {
+	return db.UpdateEnrichmentStatusWithJobProvider(id, status, result, providerID, "")
+}
+
+// UpdateEnrichmentResultField updates only a specific field (phone or email) in the result JSON
+// This ensures each job type only updates its own field without overwriting the other
+func (db *DB) UpdateEnrichmentResultField(id string, fieldName string, value string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Get current result
+	enrichment, err := db.GetEnrichment(id)
+	if err != nil {
+		return fmt.Errorf("failed to get enrichment: %w", err)
+	}
+
+	// Create or update result
+	result := &models.EnrichmentResult{}
+	if enrichment != nil && enrichment.Result != nil {
+		// Preserve existing values
+		result.Phone = enrichment.Result.Phone
+		result.Email = enrichment.Result.Email
+	}
+
+	// Update only the specified field
+	if fieldName == "phone" {
+		result.Phone = value
+	} else if fieldName == "email" {
+		result.Email = value
+	} else {
+		return fmt.Errorf("invalid field name: %s (must be 'phone' or 'email')", fieldName)
+	}
+
+	// Marshal the updated result
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("failed to marshal result: %w", err)
+	}
+	resultJSON := string(data)
+
+	// Update only the result field, preserving everything else
+	_, err = db.conn.Exec(`
+		UPDATE enrichments
+		SET updated_at = ?, result = ?
+		WHERE id = ?
+	`, now, resultJSON, id)
+	if err != nil {
+		return fmt.Errorf("failed to update enrichment result: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateEnrichmentStatusWithJobProvider updates the status, result, and provider for a specific job type
+func (db *DB) UpdateEnrichmentStatusWithJobProvider(id string, status models.EnrichmentStatus, result *models.EnrichmentResult, providerID *string, jobType string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var resultJSON *string
@@ -192,14 +536,46 @@ func (db *DB) UpdateEnrichmentStatus(id string, status models.EnrichmentStatus, 
 		resultJSON = &s
 	}
 
-	_, err := db.conn.Exec(`
-		UPDATE enrichments
-		SET status = ?, updated_at = ?, result = ?
-		WHERE id = ?
-	`, status, now, resultJSON, id)
-
-	if err != nil {
-		return fmt.Errorf("failed to update enrichment: %w", err)
+	// Update based on job type
+	if jobType == "phone" {
+		_, err := db.conn.Exec(`
+			UPDATE enrichments
+			SET status = ?, updated_at = ?, phone_provider_id = ?
+			WHERE id = ?
+		`, status, now, providerID, id)
+		if err != nil {
+			return fmt.Errorf("failed to update enrichment: %w", err)
+		}
+	} else if jobType == "email" {
+		_, err := db.conn.Exec(`
+			UPDATE enrichments
+			SET status = ?, updated_at = ?, email_provider_id = ?
+			WHERE id = ?
+		`, status, now, providerID, id)
+		if err != nil {
+			return fmt.Errorf("failed to update enrichment: %w", err)
+		}
+	} else {
+		// Legacy support or general update - update current_provider_id and clear job-specific providers if status is completed
+		if status == models.EnrichmentStatusCompleted {
+			_, err := db.conn.Exec(`
+				UPDATE enrichments
+				SET status = ?, updated_at = ?, result = ?, current_provider_id = ?, phone_provider_id = ?, email_provider_id = ?
+				WHERE id = ?
+			`, status, now, resultJSON, nil, nil, nil, id)
+			if err != nil {
+				return fmt.Errorf("failed to update enrichment: %w", err)
+			}
+		} else {
+			_, err := db.conn.Exec(`
+				UPDATE enrichments
+				SET status = ?, updated_at = ?, result = ?, current_provider_id = ?
+				WHERE id = ?
+			`, status, now, resultJSON, providerID, id)
+			if err != nil {
+				return fmt.Errorf("failed to update enrichment: %w", err)
+			}
+		}
 	}
 
 	return nil
@@ -228,10 +604,8 @@ func (db *DB) SeedStaticEnrichments() error {
 			UserID: "c3d4e5f6-a7b8-9012-cdef-123456789012", // Bob Johnson
 			Status: models.EnrichmentStatusCompleted,
 			Result: &models.EnrichmentResult{
-				LinkedInURL: "https://linkedin.com/in/bobjohnson",
-				TwitterURL:  "https://twitter.com/bob_johnson",
-				Skills:      []string{"Leadership", "Architecture", "Go", "Kubernetes"},
-				Experience:  12,
+				Phone: "+1-555-234-5678",
+				Email: "bob.johnson@startup.dev",
 			},
 		},
 		{
@@ -265,10 +639,13 @@ func (db *DB) SeedStaticEnrichments() error {
 			resultJSON = &s
 		}
 
+		// Default to phone job for static enrichments
+		jobsJSON := `["phone"]`
+
 		_, err = db.conn.Exec(`
-			INSERT INTO enrichments (id, user_id, status, created_at, updated_at, result, is_static)
-			VALUES (?, ?, ?, ?, ?, ?, 1)
-		`, e.ID, e.UserID, e.Status, now, now, resultJSON)
+			INSERT INTO enrichments (id, user_id, status, created_at, updated_at, result, current_provider_id, phone_provider_id, email_provider_id, jobs, completed_jobs, is_static)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+		`, e.ID, e.UserID, e.Status, now, now, resultJSON, nil, nil, nil, jobsJSON, "[]")
 
 		if err != nil {
 			return fmt.Errorf("failed to seed enrichment %s: %w", e.ID, err)

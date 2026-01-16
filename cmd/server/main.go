@@ -52,7 +52,7 @@ func main() {
 	h := handlers.NewHandler(mockData, db)
 
 	// Start background worker for enrichment processing
-	w := worker.New(db, worker.DefaultConfig())
+	w := worker.New(db, mockData, worker.DefaultConfig())
 	w.Start()
 
 	// Setup routes

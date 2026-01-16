@@ -27,9 +27,15 @@ const docTemplate = `{
         "/contact/{id}": {
             "get": {
                 "description": "Returns the basic information around the contact based on their ID",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["contacts"],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "contacts"
+                ],
                 "summary": "Get contact by ID",
                 "parameters": [
                     {
@@ -44,13 +50,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/Contact"
+                            "$ref": "#/definitions/models.Contact"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/ErrorResponse"
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     }
                 }
@@ -59,9 +65,15 @@ const docTemplate = `{
         "/enrichment/start": {
             "post": {
                 "description": "Starts an enrichment process, taking the userID and additional optional payload",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["enrichment"],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "enrichment"
+                ],
                 "summary": "Start an enrichment",
                 "parameters": [
                     {
@@ -70,7 +82,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/EnrichmentStartRequest"
+                            "$ref": "#/definitions/models.EnrichmentStartRequest"
                         }
                     }
                 ],
@@ -78,13 +90,13 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/EnrichmentStartResponse"
+                            "$ref": "#/definitions/models.EnrichmentStartResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/ErrorResponse"
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     }
                 }
@@ -93,9 +105,15 @@ const docTemplate = `{
         "/enrichment/{id}": {
             "get": {
                 "description": "Returns the status of the enrichment based on the ID",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["enrichment"],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "enrichment"
+                ],
                 "summary": "Get enrichment status",
                 "parameters": [
                     {
@@ -110,13 +128,36 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/Enrichment"
+                            "$ref": "#/definitions/models.Enrichment"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/ErrorResponse"
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns the health status of the API",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -125,9 +166,15 @@ const docTemplate = `{
         "/thirdparty/{full_name}": {
             "get": {
                 "description": "Returns additional information about the user based on their full name",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["thirdparty"],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "thirdparty"
+                ],
                 "summary": "Get third-party information",
                 "parameters": [
                     {
@@ -142,32 +189,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/ThirdPartyInfo"
+                            "$ref": "#/definitions/models.ThirdPartyInfo"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/health": {
-            "get": {
-                "description": "Returns the health status of the API",
-                "produces": ["application/json"],
-                "tags": ["health"],
-                "summary": "Health check",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     }
                 }
@@ -175,95 +203,124 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "Contact": {
+        "models.Contact": {
             "type": "object",
             "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "firstName": {
-                    "type": "string"
-                },
-                "lastName": {
+                "company": {
                     "type": "string"
                 },
                 "email": {
                     "type": "string"
                 },
-                "phone": {
+                "firstName": {
                     "type": "string"
                 },
-                "company": {
+                "id": {
                     "type": "string"
                 },
                 "jobTitle": {
                     "type": "string"
+                },
+                "lastName": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
                 }
             }
         },
-        "Enrichment": {
+        "models.Enrichment": {
             "type": "object",
             "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "currentProvider": {
+                    "$ref": "#/definitions/models.Provider"
+                },
                 "id": {
                     "type": "string"
                 },
-                "userId": {
-                    "type": "string"
+                "result": {
+                    "$ref": "#/definitions/models.EnrichmentResult"
                 },
                 "status": {
-                    "type": "string",
-                    "enum": ["pending", "in_progress", "completed", "failed"]
-                },
-                "createdAt": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.EnrichmentStatus"
                 },
                 "updatedAt": {
                     "type": "string"
                 },
-                "result": {
-                    "$ref": "#/definitions/EnrichmentResult"
+                "userId": {
+                    "type": "string"
                 }
             }
         },
-        "EnrichmentResult": {
+        "models.EnrichmentResult": {
             "type": "object",
             "properties": {
-                "linkedInUrl": {
+                "email": {
                     "type": "string"
                 },
-                "twitterUrl": {
+                "phone": {
                     "type": "string"
-                },
-                "skills": {
+                }
+            }
+        },
+        "models.EnrichmentStartRequest": {
+            "type": "object",
+            "properties": {
+                "jobs": {
+                    "description": "Array of \"email\" and/or \"phone\"",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
-                "experienceYears": {
-                    "type": "integer"
-                }
-            }
-        },
-        "EnrichmentStartRequest": {
-            "type": "object",
-            "required": ["userId"],
-            "properties": {
+                "options": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
                 "userId": {
                     "type": "string"
-                },
-                "options": {
-                    "type": "object"
                 }
             }
         },
-        "EnrichmentStartResponse": {
+        "models.EnrichmentStartResponse": {
             "type": "object",
             "properties": {
                 "id": {
                     "type": "string"
                 },
+                "message": {
+                    "type": "string"
+                },
                 "status": {
+                    "$ref": "#/definitions/models.EnrichmentStatus"
+                }
+            }
+        },
+        "models.EnrichmentStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "in_progress",
+                "completed",
+                "failed"
+            ],
+            "x-enum-varnames": [
+                "EnrichmentStatusPending",
+                "EnrichmentStatusInProgress",
+                "EnrichmentStatusCompleted",
+                "EnrichmentStatusFailed"
+            ]
+        },
+        "models.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "error": {
                     "type": "string"
                 },
                 "message": {
@@ -271,22 +328,39 @@ const docTemplate = `{
                 }
             }
         },
-        "ThirdPartyInfo": {
+        "models.Provider": {
             "type": "object",
             "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "imageUrl": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ThirdPartyInfo": {
+            "type": "object",
+            "properties": {
+                "bio": {
+                    "type": "string"
+                },
+                "companies": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "fullName": {
-                    "type": "string"
-                },
-                "linkedInUrl": {
-                    "type": "string"
-                },
-                "twitterHandle": {
                     "type": "string"
                 },
                 "githubUsername": {
                     "type": "string"
                 },
-                "bio": {
+                "linkedInUrl": {
                     "type": "string"
                 },
                 "location": {
@@ -298,24 +372,7 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "companies": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "ErrorResponse": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "type": "string"
-                },
-                "code": {
-                    "type": "integer"
-                },
-                "message": {
+                "twitterHandle": {
                     "type": "string"
                 }
             }

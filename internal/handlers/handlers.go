@@ -75,7 +75,23 @@ func (h *Handler) StartEnrichment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enrichment, err := h.db.CreateEnrichment(req.UserID)
+	// Validate jobs if provided
+	jobs := req.Jobs
+	if len(jobs) > 0 {
+		validJobs := make([]string, 0, len(jobs))
+		for _, job := range jobs {
+			if job == "phone" || job == "email" {
+				validJobs = append(validJobs, job)
+			}
+		}
+		jobs = validJobs
+		if len(jobs) == 0 {
+			writeError(w, http.StatusBadRequest, "jobs must contain 'phone' and/or 'email'")
+			return
+		}
+	}
+
+	enrichment, err := h.db.CreateEnrichment(req.UserID, jobs, req.Contact)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create enrichment")
 		return
@@ -107,7 +123,7 @@ func (h *Handler) GetEnrichment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enrichment, err := h.db.GetEnrichment(id)
+	enrichment, phoneProviderID, emailProviderID, err := h.db.GetEnrichmentWithProviders(id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get enrichment")
 		return
@@ -115,6 +131,103 @@ func (h *Handler) GetEnrichment(w http.ResponseWriter, r *http.Request) {
 	if enrichment == nil {
 		writeError(w, http.StatusNotFound, "enrichment not found")
 		return
+	}
+
+	// Get jobs and completed jobs to determine status
+	jobs, completedJobs, err := h.db.GetEnrichmentJobs(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get enrichment jobs")
+		return
+	}
+
+	// Populate Phone JobStatus
+	phoneRequested := false
+	phoneCompleted := false
+	for _, job := range jobs {
+		if job == "phone" {
+			phoneRequested = true
+			break
+		}
+	}
+	for _, completed := range completedJobs {
+		if completed == "phone" {
+			phoneCompleted = true
+			break
+		}
+	}
+
+	if phoneRequested {
+		phoneStatus := &models.JobStatus{
+			Pending: !phoneCompleted,
+		}
+
+		// Set current provider
+		if phoneProviderID != nil && *phoneProviderID != "" {
+			provider, exists := h.data.GetProvider(*phoneProviderID)
+			if exists {
+				phoneStatus.CurrentProvider = &provider
+			}
+		}
+
+		// Set result and message
+		if phoneCompleted {
+			if enrichment.Result != nil && enrichment.Result.Phone != "" {
+				phoneStatus.Result = enrichment.Result.Phone
+				phoneStatus.Message = "Phone number found successfully"
+			} else {
+				phoneStatus.Result = ""
+				phoneStatus.Message = "Phone number not found after checking all providers"
+			}
+		} else {
+			phoneStatus.Message = "Searching for phone number..."
+		}
+
+		enrichment.Phone = phoneStatus
+	}
+
+	// Populate Email JobStatus
+	emailRequested := false
+	emailCompleted := false
+	for _, job := range jobs {
+		if job == "email" {
+			emailRequested = true
+			break
+		}
+	}
+	for _, completed := range completedJobs {
+		if completed == "email" {
+			emailCompleted = true
+			break
+		}
+	}
+
+	if emailRequested {
+		emailStatus := &models.JobStatus{
+			Pending: !emailCompleted,
+		}
+
+		// Set current provider
+		if emailProviderID != nil && *emailProviderID != "" {
+			provider, exists := h.data.GetProvider(*emailProviderID)
+			if exists {
+				emailStatus.CurrentProvider = &provider
+			}
+		}
+
+		// Set result and message
+		if emailCompleted {
+			if enrichment.Result != nil && enrichment.Result.Email != "" {
+				emailStatus.Result = enrichment.Result.Email
+				emailStatus.Message = "Email found successfully"
+			} else {
+				emailStatus.Result = ""
+				emailStatus.Message = "Email not found after checking all providers"
+			}
+		} else {
+			emailStatus.Message = "Searching for email..."
+		}
+
+		enrichment.Email = emailStatus
 	}
 
 	writeJSON(w, http.StatusOK, enrichment)
