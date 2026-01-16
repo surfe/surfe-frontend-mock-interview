@@ -54,6 +54,7 @@ func (db *DB) migrate() error {
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL,
 		result TEXT,
+		current_provider_id TEXT,
 		is_static INTEGER DEFAULT 0
 	);
 
@@ -62,7 +63,14 @@ func (db *DB) migrate() error {
 	`
 
 	_, err := db.conn.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Add current_provider_id column if it doesn't exist (for existing databases)
+	_, err = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN current_provider_id TEXT`)
+	// Ignore error if column already exists
+	return nil
 }
 
 // Close closes the database connection
@@ -84,9 +92,9 @@ func (db *DB) CreateEnrichment(userID string) (*models.Enrichment, error) {
 	}
 
 	_, err := db.conn.Exec(`
-		INSERT INTO enrichments (id, user_id, status, created_at, updated_at, is_static)
-		VALUES (?, ?, ?, ?, ?, 0)
-	`, enrichment.ID, enrichment.UserID, enrichment.Status, enrichment.CreatedAt, enrichment.UpdatedAt)
+		INSERT INTO enrichments (id, user_id, status, created_at, updated_at, current_provider_id, is_static)
+		VALUES (?, ?, ?, ?, ?, ?, 0)
+	`, enrichment.ID, enrichment.UserID, enrichment.Status, enrichment.CreatedAt, enrichment.UpdatedAt, nil)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create enrichment: %w", err)
@@ -99,12 +107,13 @@ func (db *DB) CreateEnrichment(userID string) (*models.Enrichment, error) {
 func (db *DB) GetEnrichment(id string) (*models.Enrichment, error) {
 	var enrichment models.Enrichment
 	var resultJSON sql.NullString
+	var currentProviderID sql.NullString
 
 	err := db.conn.QueryRow(`
-		SELECT id, user_id, status, created_at, updated_at, result
+		SELECT id, user_id, status, created_at, updated_at, result, current_provider_id
 		FROM enrichments
 		WHERE id = ?
-	`, id).Scan(&enrichment.ID, &enrichment.UserID, &enrichment.Status, &enrichment.CreatedAt, &enrichment.UpdatedAt, &resultJSON)
+	`, id).Scan(&enrichment.ID, &enrichment.UserID, &enrichment.Status, &enrichment.CreatedAt, &enrichment.UpdatedAt, &resultJSON, &currentProviderID)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -119,6 +128,12 @@ func (db *DB) GetEnrichment(id string) (*models.Enrichment, error) {
 			return nil, fmt.Errorf("failed to unmarshal result: %w", err)
 		}
 		enrichment.Result = &result
+	}
+
+	if currentProviderID.Valid && currentProviderID.String != "" {
+		enrichment.CurrentProvider = &models.Provider{
+			ID: currentProviderID.String,
+		}
 	}
 
 	return &enrichment, nil
@@ -180,6 +195,11 @@ func (db *DB) GetInProgressEnrichments(olderThan time.Duration) ([]*models.Enric
 
 // UpdateEnrichmentStatus updates the status of an enrichment
 func (db *DB) UpdateEnrichmentStatus(id string, status models.EnrichmentStatus, result *models.EnrichmentResult) error {
+	return db.UpdateEnrichmentStatusWithProvider(id, status, result, nil)
+}
+
+// UpdateEnrichmentStatusWithProvider updates the status and current provider of an enrichment
+func (db *DB) UpdateEnrichmentStatusWithProvider(id string, status models.EnrichmentStatus, result *models.EnrichmentResult, providerID *string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var resultJSON *string
@@ -194,9 +214,9 @@ func (db *DB) UpdateEnrichmentStatus(id string, status models.EnrichmentStatus, 
 
 	_, err := db.conn.Exec(`
 		UPDATE enrichments
-		SET status = ?, updated_at = ?, result = ?
+		SET status = ?, updated_at = ?, result = ?, current_provider_id = ?
 		WHERE id = ?
-	`, status, now, resultJSON, id)
+	`, status, now, resultJSON, providerID, id)
 
 	if err != nil {
 		return fmt.Errorf("failed to update enrichment: %w", err)
@@ -266,9 +286,9 @@ func (db *DB) SeedStaticEnrichments() error {
 		}
 
 		_, err = db.conn.Exec(`
-			INSERT INTO enrichments (id, user_id, status, created_at, updated_at, result, is_static)
-			VALUES (?, ?, ?, ?, ?, ?, 1)
-		`, e.ID, e.UserID, e.Status, now, now, resultJSON)
+			INSERT INTO enrichments (id, user_id, status, created_at, updated_at, result, current_provider_id, is_static)
+			VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+		`, e.ID, e.UserID, e.Status, now, now, resultJSON, nil)
 
 		if err != nil {
 			return fmt.Errorf("failed to seed enrichment %s: %w", e.ID, err)

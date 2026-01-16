@@ -191,3 +191,22 @@ func (md *MockData) GetThirdPartyInfo(fullName string) (models.ThirdPartyInfo, b
 	info, exists := md.ThirdParty[strings.ToLower(fullName)]
 	return info, exists
 }
+
+// GetAllProviders retrieves all providers
+func (md *MockData) GetAllProviders() []models.Provider {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+	providers := make([]models.Provider, 0, len(md.Providers))
+	for _, provider := range md.Providers {
+		providers = append(providers, provider)
+	}
+	return providers
+}
+
+// GetProvider retrieves a provider by ID
+func (md *MockData) GetProvider(id string) (models.Provider, bool) {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+	provider, exists := md.Providers[id]
+	return provider, exists
+}

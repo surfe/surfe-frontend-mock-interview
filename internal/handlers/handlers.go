@@ -117,6 +117,14 @@ func (h *Handler) GetEnrichment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Populate the full provider object if current provider ID is set
+	if enrichment.CurrentProvider != nil && enrichment.CurrentProvider.ID != "" {
+		provider, exists := h.data.GetProvider(enrichment.CurrentProvider.ID)
+		if exists {
+			enrichment.CurrentProvider = &provider
+		}
+	}
+
 	writeJSON(w, http.StatusOK, enrichment)
 }
 

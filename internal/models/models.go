@@ -23,12 +23,13 @@ const (
 
 // Enrichment represents an enrichment process
 type Enrichment struct {
-	ID        string            `json:"id"`
-	UserID    string            `json:"userId"`
-	Status    EnrichmentStatus  `json:"status"`
-	CreatedAt string            `json:"createdAt"`
-	UpdatedAt string            `json:"updatedAt"`
-	Result    *EnrichmentResult `json:"result,omitempty"`
+	ID              string            `json:"id"`
+	UserID          string            `json:"userId"`
+	Status          EnrichmentStatus  `json:"status"`
+	CreatedAt       string            `json:"createdAt"`
+	UpdatedAt       string            `json:"updatedAt"`
+	Result          *EnrichmentResult `json:"result,omitempty"`
+	CurrentProvider *Provider         `json:"currentProvider,omitempty"`
 }
 
 // EnrichmentResult contains the enriched data
@@ -37,6 +38,7 @@ type EnrichmentResult struct {
 	TwitterURL  string   `json:"twitterUrl,omitempty"`
 	Skills      []string `json:"skills,omitempty"`
 	Experience  int      `json:"experienceYears,omitempty"`
+	Phone       string   `json:"phone,omitempty"`
 }
 
 // EnrichmentStartRequest is the payload for starting an enrichment
