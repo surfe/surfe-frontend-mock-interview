@@ -21,15 +21,24 @@ const (
 	EnrichmentStatusFailed     EnrichmentStatus = "failed"
 )
 
+// JobStatus represents the status of a specific job (phone or email)
+type JobStatus struct {
+	CurrentProvider *Provider `json:"currentProvider,omitempty"`
+	Result          string    `json:"result,omitempty"`
+	Message         string    `json:"message,omitempty"`
+	Pending         bool      `json:"pending"`
+}
+
 // Enrichment represents an enrichment process
 type Enrichment struct {
-	ID              string            `json:"id"`
-	UserID          string            `json:"userId"`
-	Status          EnrichmentStatus  `json:"status"`
-	CreatedAt       string            `json:"createdAt"`
-	UpdatedAt       string            `json:"updatedAt"`
-	Result          *EnrichmentResult `json:"result,omitempty"`
-	CurrentProvider *Provider         `json:"currentProvider,omitempty"`
+	ID        string            `json:"id"`
+	UserID    string            `json:"userId"`
+	Status    EnrichmentStatus  `json:"status"`
+	CreatedAt string            `json:"createdAt"`
+	UpdatedAt string            `json:"updatedAt"`
+	Result    *EnrichmentResult `json:"result,omitempty"`
+	Phone     *JobStatus        `json:"phone,omitempty"`
+	Email     *JobStatus        `json:"email,omitempty"`
 }
 
 // EnrichmentResult contains the enriched data
