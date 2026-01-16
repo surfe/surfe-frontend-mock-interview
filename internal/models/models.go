@@ -47,11 +47,23 @@ type EnrichmentResult struct {
 	Email string `json:"email,omitempty"`
 }
 
+// EnrichmentContactInfo contains optional third-party contact information
+// If provided and matches the mock third-party data, success rate increases to 80%
+type EnrichmentContactInfo struct {
+	LinkedInURL    string   `json:"linkedInUrl,omitempty"`
+	TwitterHandle  string   `json:"twitterHandle,omitempty"`
+	GitHubUsername string   `json:"githubUsername,omitempty"`
+	Bio            string   `json:"bio,omitempty"`
+	Location       string   `json:"location,omitempty"`
+	Skills         []string `json:"skills,omitempty"`
+	Companies      []string `json:"companies,omitempty"`
+}
+
 // EnrichmentStartRequest is the payload for starting an enrichment
 type EnrichmentStartRequest struct {
 	UserID  string                 `json:"userId"`
-	Jobs    []string               `json:"jobs,omitempty"` // Array of "email" and/or "phone"
-	Options map[string]interface{} `json:"options,omitempty"`
+	Jobs    []string               `json:"jobs,omitempty"`    // Array of "email" and/or "phone"
+	Contact *EnrichmentContactInfo `json:"contact,omitempty"` // Optional contact info to boost success rate
 }
 
 // EnrichmentStartResponse is returned when an enrichment is started

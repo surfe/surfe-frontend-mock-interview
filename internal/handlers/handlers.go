@@ -91,7 +91,7 @@ func (h *Handler) StartEnrichment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	enrichment, err := h.db.CreateEnrichment(req.UserID, jobs)
+	enrichment, err := h.db.CreateEnrichment(req.UserID, jobs, req.Contact)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create enrichment")
 		return

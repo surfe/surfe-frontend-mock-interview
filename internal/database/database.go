@@ -93,6 +93,7 @@ func (db *DB) migrate() error {
 		email_provider_id TEXT,
 		jobs TEXT,
 		completed_jobs TEXT,
+		contact_info TEXT,
 		is_static INTEGER DEFAULT 0
 	);
 
@@ -124,6 +125,7 @@ func (db *DB) migrate() error {
 	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN email_provider_id TEXT`)
 	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN jobs TEXT`)
 	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN completed_jobs TEXT`)
+	_, _ = db.conn.Exec(`ALTER TABLE enrichments ADD COLUMN contact_info TEXT`)
 
 	return nil
 }
@@ -134,7 +136,7 @@ func (db *DB) Close() error {
 }
 
 // CreateEnrichment creates a new enrichment record
-func (db *DB) CreateEnrichment(userID string, jobs []string) (*models.Enrichment, error) {
+func (db *DB) CreateEnrichment(userID string, jobs []string, contactInfo *models.EnrichmentContactInfo) (*models.Enrichment, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -157,10 +159,21 @@ func (db *DB) CreateEnrichment(userID string, jobs []string) (*models.Enrichment
 		return nil, fmt.Errorf("failed to marshal jobs: %w", err)
 	}
 
+	// Marshal contact info to JSON if provided
+	var contactInfoJSON *string
+	if contactInfo != nil {
+		contactData, err := json.Marshal(contactInfo)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal contact info: %w", err)
+		}
+		s := string(contactData)
+		contactInfoJSON = &s
+	}
+
 	_, err = db.conn.Exec(`
-		INSERT INTO enrichments (id, user_id, status, created_at, updated_at, current_provider_id, phone_provider_id, email_provider_id, jobs, completed_jobs, is_static)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-	`, enrichment.ID, enrichment.UserID, enrichment.Status, enrichment.CreatedAt, enrichment.UpdatedAt, nil, nil, nil, string(jobsJSON), "[]")
+		INSERT INTO enrichments (id, user_id, status, created_at, updated_at, current_provider_id, phone_provider_id, email_provider_id, jobs, completed_jobs, contact_info, is_static)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+	`, enrichment.ID, enrichment.UserID, enrichment.Status, enrichment.CreatedAt, enrichment.UpdatedAt, nil, nil, nil, string(jobsJSON), "[]", contactInfoJSON)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create enrichment: %w", err)
@@ -210,6 +223,35 @@ func (db *DB) GetEnrichment(id string) (*models.Enrichment, error) {
 	}
 
 	return &enrichment, nil
+}
+
+// GetEnrichmentContactInfo retrieves the contact info for an enrichment
+func (db *DB) GetEnrichmentContactInfo(id string) (*models.EnrichmentContactInfo, error) {
+	var contactInfoJSON sql.NullString
+
+	err := db.conn.QueryRow(`
+		SELECT contact_info
+		FROM enrichments
+		WHERE id = ?
+	`, id).Scan(&contactInfoJSON)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get enrichment contact info: %w", err)
+	}
+
+	if !contactInfoJSON.Valid || contactInfoJSON.String == "" {
+		return nil, nil
+	}
+
+	var contactInfo models.EnrichmentContactInfo
+	if err := json.Unmarshal([]byte(contactInfoJSON.String), &contactInfo); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal contact info: %w", err)
+	}
+
+	return &contactInfo, nil
 }
 
 // GetEnrichmentWithProviders retrieves an enrichment with provider IDs for phone and email

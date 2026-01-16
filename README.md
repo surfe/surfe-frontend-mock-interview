@@ -85,7 +85,7 @@ The enrichment system searches through 6 providers to find phone numbers and ema
 Each provider:
 
 - Takes 5 seconds ± 1 second (4-6 seconds) to respond
-- Has a 20% chance of finding the requested value (phone or email)
+- Has a 30% chance of finding the requested value (phone or email)
 - Is searched sequentially until a value is found or all providers are checked
 
 ### Third-Party Lookups (by Full Name)
@@ -284,7 +284,7 @@ pending ──> in_progress ──> completed
 - **Parallel Processing**: If both phone and email are requested, they run simultaneously
 - **Provider Search**: Each job searches through all available providers (6 providers total)
 - **Provider Timing**: Each provider takes 5 seconds ± 1 second (4-6 seconds) to respond
-- **Success Rate**: Each provider has a 20% chance of finding the requested value
+- **Success Rate**: Each provider has a 30% chance of finding the requested value
 - **Completion**:
   - If a value is found, that job completes immediately
   - If a value is not found after checking all providers, it's set to an empty string

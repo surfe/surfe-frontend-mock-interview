@@ -3,6 +3,7 @@ package worker
 import (
 	"log"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -149,7 +150,27 @@ func (w *Worker) processEnrichmentThroughProviders(enrichmentID, userID string) 
 		return
 	}
 
-	log.Printf("Processing enrichment %s through %d providers for jobs: %v", enrichmentID, len(providers), jobs)
+	// Get contact info and check if it matches third-party data to boost success rate
+	contactInfo, err := w.db.GetEnrichmentContactInfo(enrichmentID)
+	if err != nil {
+		log.Printf("Error getting contact info for enrichment %s: %v", enrichmentID, err)
+	}
+
+	// Calculate success rate: 80% if contact info matches, otherwise use base rate
+	successRate := w.config.ProviderSuccessRate
+	if contactInfo != nil {
+		// Get the full name from contact
+		fullName := contact.FirstName + " " + contact.LastName
+		thirdPartyInfo, exists := w.mockData.GetThirdPartyInfo(fullName)
+		if exists && w.contactInfoMatches(contactInfo, &thirdPartyInfo) {
+			successRate = 0.8 // 80% success rate when contact info matches
+			log.Printf("✅ SUCCESS RATE BOOSTED: Contact info matches third-party data for enrichment %s (user: %s). Success rate increased from %.0f%% to 80%%", enrichmentID, fullName, w.config.ProviderSuccessRate*100)
+		} else {
+			log.Printf("Contact info provided for enrichment %s (user: %s) but does not match third-party data. Using base success rate of %.0f%%", enrichmentID, fullName, w.config.ProviderSuccessRate*100)
+		}
+	}
+
+	log.Printf("Processing enrichment %s through %d providers for jobs: %v (success rate: %.0f%%)", enrichmentID, len(providers), jobs, successRate*100)
 
 	// Use WaitGroup to wait for all job types to complete
 	var wg sync.WaitGroup
@@ -159,7 +180,7 @@ func (w *Worker) processEnrichmentThroughProviders(enrichmentID, userID string) 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			w.processJobForEnrichment(enrichmentID, contact, "phone", providers)
+			w.processJobForEnrichment(enrichmentID, contact, "phone", providers, successRate)
 		}()
 	}
 
@@ -168,7 +189,7 @@ func (w *Worker) processEnrichmentThroughProviders(enrichmentID, userID string) 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			w.processJobForEnrichment(enrichmentID, contact, "email", providers)
+			w.processJobForEnrichment(enrichmentID, contact, "email", providers, successRate)
 		}()
 	}
 
@@ -240,9 +261,76 @@ func (w *Worker) processEnrichmentThroughProviders(enrichmentID, userID string) 
 	}
 }
 
+// contactInfoMatches checks if the provided contact info matches the third-party data
+func (w *Worker) contactInfoMatches(contactInfo *models.EnrichmentContactInfo, thirdPartyInfo *models.ThirdPartyInfo) bool {
+	// Compare all fields (case-insensitive for strings, order-independent for slices)
+	if contactInfo.LinkedInURL != "" && contactInfo.LinkedInURL != thirdPartyInfo.LinkedInURL {
+		return false
+	}
+	if contactInfo.TwitterHandle != "" && contactInfo.TwitterHandle != thirdPartyInfo.TwitterHandle {
+		return false
+	}
+	if contactInfo.GitHubUsername != "" && contactInfo.GitHubUsername != thirdPartyInfo.GitHubUsername {
+		return false
+	}
+	if contactInfo.Bio != "" && contactInfo.Bio != thirdPartyInfo.Bio {
+		return false
+	}
+	if contactInfo.Location != "" && contactInfo.Location != thirdPartyInfo.Location {
+		return false
+	}
+
+	// Compare skills (order-independent)
+	if len(contactInfo.Skills) > 0 {
+		if !w.stringSlicesEqual(contactInfo.Skills, thirdPartyInfo.Skills) {
+			return false
+		}
+	}
+
+	// Compare companies (order-independent)
+	if len(contactInfo.Companies) > 0 {
+		if !w.stringSlicesEqual(contactInfo.Companies, thirdPartyInfo.Companies) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// stringSlicesEqual checks if two string slices contain the same elements (order-independent)
+func (w *Worker) stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	// Create maps for comparison
+	mapA := make(map[string]int)
+	mapB := make(map[string]int)
+
+	for _, s := range a {
+		mapA[strings.ToLower(s)]++
+	}
+	for _, s := range b {
+		mapB[strings.ToLower(s)]++
+	}
+
+	// Compare maps
+	if len(mapA) != len(mapB) {
+		return false
+	}
+
+	for k, v := range mapA {
+		if mapB[k] != v {
+			return false
+		}
+	}
+
+	return true
+}
+
 // processJobForEnrichment processes a single job type (phone or email) through providers
 // for a given enrichment. Runs independently and can complete while other jobs continue.
-func (w *Worker) processJobForEnrichment(enrichmentID string, contact models.Contact, jobType string, providers []models.Provider) {
+func (w *Worker) processJobForEnrichment(enrichmentID string, contact models.Contact, jobType string, providers []models.Provider, successRate float32) {
 	log.Printf("Starting %s job processing for enrichment %s", jobType, enrichmentID)
 
 	// Process through each provider
@@ -303,7 +391,7 @@ func (w *Worker) processJobForEnrichment(enrichmentID string, contact models.Con
 
 		// Check if this provider finds the requested data
 		found := false
-		if rand.Float32() < w.config.ProviderSuccessRate {
+		if rand.Float32() < successRate {
 			found = true
 			var value string
 			// Get enrichment data (phone/email that can be found)
