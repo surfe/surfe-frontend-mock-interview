@@ -23,26 +23,26 @@ const (
 
 // Enrichment represents an enrichment process
 type Enrichment struct {
-	ID        string           `json:"id"`
-	UserID    string           `json:"userId"`
-	Status    EnrichmentStatus `json:"status"`
-	CreatedAt string           `json:"createdAt"`
-	UpdatedAt string           `json:"updatedAt"`
+	ID        string            `json:"id"`
+	UserID    string            `json:"userId"`
+	Status    EnrichmentStatus  `json:"status"`
+	CreatedAt string            `json:"createdAt"`
+	UpdatedAt string            `json:"updatedAt"`
 	Result    *EnrichmentResult `json:"result,omitempty"`
 }
 
 // EnrichmentResult contains the enriched data
 type EnrichmentResult struct {
-	LinkedInURL  string   `json:"linkedInUrl,omitempty"`
-	TwitterURL   string   `json:"twitterUrl,omitempty"`
-	Skills       []string `json:"skills,omitempty"`
-	Experience   int      `json:"experienceYears,omitempty"`
+	LinkedInURL string   `json:"linkedInUrl,omitempty"`
+	TwitterURL  string   `json:"twitterUrl,omitempty"`
+	Skills      []string `json:"skills,omitempty"`
+	Experience  int      `json:"experienceYears,omitempty"`
 }
 
 // EnrichmentStartRequest is the payload for starting an enrichment
 type EnrichmentStartRequest struct {
-	UserID   string                 `json:"userId"`
-	Options  map[string]interface{} `json:"options,omitempty"`
+	UserID  string                 `json:"userId"`
+	Options map[string]interface{} `json:"options,omitempty"`
 }
 
 // EnrichmentStartResponse is returned when an enrichment is started
@@ -62,6 +62,12 @@ type ThirdPartyInfo struct {
 	Location       string   `json:"location,omitempty"`
 	Skills         []string `json:"skills,omitempty"`
 	Companies      []string `json:"companies,omitempty"`
+}
+
+type Provider struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	ImageURL string `json:"imageUrl,omitempty"`
 }
 
 // ErrorResponse represents an API error
