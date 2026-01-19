@@ -235,11 +235,14 @@ const docTemplate = `{
                 "createdAt": {
                     "type": "string"
                 },
-                "currentProvider": {
-                    "$ref": "#/definitions/models.Provider"
+                "email": {
+                    "$ref": "#/definitions/models.JobStatus"
                 },
                 "id": {
                     "type": "string"
+                },
+                "phone": {
+                    "$ref": "#/definitions/models.JobStatus"
                 },
                 "result": {
                     "$ref": "#/definitions/models.EnrichmentResult"
@@ -251,6 +254,38 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.EnrichmentContactInfo": {
+            "type": "object",
+            "properties": {
+                "bio": {
+                    "type": "string"
+                },
+                "companies": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "githubUsername": {
+                    "type": "string"
+                },
+                "linkedInUrl": {
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "twitterHandle": {
                     "type": "string"
                 }
             }
@@ -269,16 +304,20 @@ const docTemplate = `{
         "models.EnrichmentStartRequest": {
             "type": "object",
             "properties": {
+                "contact": {
+                    "description": "Optional contact info to boost success rate",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.EnrichmentContactInfo"
+                        }
+                    ]
+                },
                 "jobs": {
                     "description": "Array of \"email\" and/or \"phone\"",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
-                },
-                "options": {
-                    "type": "object",
-                    "additionalProperties": true
                 },
                 "userId": {
                     "type": "string"
@@ -324,6 +363,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.JobStatus": {
+            "type": "object",
+            "properties": {
+                "currentProvider": {
+                    "$ref": "#/definitions/models.Provider"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "pending": {
+                    "type": "boolean"
+                },
+                "result": {
                     "type": "string"
                 }
             }
