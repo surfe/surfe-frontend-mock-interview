@@ -165,6 +165,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/contacts": {
+            "get": {
+                "description": "Returns all available contacts from the database",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "contacts"
+                ],
+                "summary": "Get all contacts",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.Contact"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/enrichment/start": {
             "post": {
                 "description": "Starts an enrichment process, taking the userID and additional optional payload",
@@ -205,9 +231,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/enrichment/{id}": {
+        "/enrichment/{enrichmentId}": {
             "get": {
-                "description": "Returns the status of the enrichment based on the ID",
+                "description": "Returns the status of the enrichment based on the enrichment ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -222,7 +248,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Enrichment ID",
-                        "name": "id",
+                        "name": "enrichmentId",
                         "in": "path",
                         "required": true
                     }
