@@ -128,9 +128,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/enrichment/{id}": {
+        "/enrichment/{enrichmentId}": {
             "get": {
-                "description": "Returns the status of the enrichment based on the ID",
+                "description": "Returns the status of the enrichment based on the enrichment ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -145,7 +145,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Enrichment ID",
-                        "name": "id",
+                        "name": "enrichmentId",
                         "in": "path",
                         "required": true
                     }

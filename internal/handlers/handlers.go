@@ -123,14 +123,14 @@ func (h *Handler) StartEnrichment(w http.ResponseWriter, r *http.Request) {
 
 // GetEnrichment godoc
 // @Summary      Get enrichment status
-// @Description  Returns the status of the enrichment based on the ID
+// @Description  Returns the status of the enrichment based on the enrichment ID
 // @Tags         enrichment
 // @Accept       json
 // @Produce      json
-// @Param        id   path      string  true  "Enrichment ID"
+// @Param        enrichmentId   path      string  true  "Enrichment ID"
 // @Success      200  {object}  models.Enrichment
 // @Failure      404  {object}  models.ErrorResponse
-// @Router       /enrichment/{id} [get]
+// @Router       /enrichment/{enrichmentId} [get]
 func (h *Handler) GetEnrichment(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/enrichment/")
 	if id == "" || id == "start" {
