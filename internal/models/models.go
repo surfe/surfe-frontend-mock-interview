@@ -97,3 +97,9 @@ type ErrorResponse struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
+
+// UpdateContactRequest is the payload for updating a contact's phone and/or email
+type UpdateContactRequest struct {
+	Phone *string `json:"phone,omitempty"`
+	Email *string `json:"email,omitempty"`
+}

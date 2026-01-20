@@ -63,6 +63,59 @@ func (h *Handler) GetContact(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, contact)
 }
 
+// UpdateContact godoc
+// @Summary      Update contact phone and/or email
+// @Description  Updates the phone and/or email of a contact by ID
+// @Tags         contacts
+// @Accept       json
+// @Produce      json
+// @Param        id       path      string                      true  "Contact ID"
+// @Param        request  body      models.UpdateContactRequest true  "Update request"
+// @Success      200      {object}  models.Contact
+// @Failure      400      {object}  models.ErrorResponse
+// @Failure      404      {object}  models.ErrorResponse
+// @Router       /contact/{id} [put]
+func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/contact/")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "missing contact ID")
+		return
+	}
+
+	// Check if contact exists
+	_, exists := h.data.GetContact(id)
+	if !exists {
+		writeError(w, http.StatusNotFound, "contact not found")
+		return
+	}
+
+	var req models.UpdateContactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Update phone if provided
+	if req.Phone != nil {
+		if err := h.data.UpdateContactPhone(id, *req.Phone); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to update phone")
+			return
+		}
+	}
+
+	// Update email if provided
+	if req.Email != nil {
+		if err := h.data.UpdateContactEmail(id, *req.Email); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to update email")
+			return
+		}
+	}
+
+	// Return updated contact
+	contact, _ := h.data.GetContact(id)
+	writeJSON(w, http.StatusOK, contact)
+}
+
 // StartEnrichment godoc
 // @Summary      Start an enrichment
 // @Description  Starts an enrichment process, taking the userID and additional optional payload
