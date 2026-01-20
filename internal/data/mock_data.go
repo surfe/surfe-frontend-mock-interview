@@ -228,6 +228,17 @@ func (md *MockData) GetContact(id string) (models.Contact, bool) {
 	return contact, exists
 }
 
+// GetAllContacts retrieves all contacts
+func (md *MockData) GetAllContacts() []models.Contact {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+	contacts := make([]models.Contact, 0, len(md.Contacts))
+	for _, contact := range md.Contacts {
+		contacts = append(contacts, contact)
+	}
+	return contacts
+}
+
 // GetThirdPartyInfo retrieves third-party info by full name (case-insensitive)
 func (md *MockData) GetThirdPartyInfo(fullName string) (models.ThirdPartyInfo, bool) {
 	md.mu.RLock()

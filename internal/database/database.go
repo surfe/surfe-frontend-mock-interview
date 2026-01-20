@@ -584,34 +584,42 @@ func (db *DB) UpdateEnrichmentStatusWithJobProvider(id string, status models.Enr
 // SeedStaticEnrichments creates the static test enrichments if they don't exist
 func (db *DB) SeedStaticEnrichments() error {
 	staticEnrichments := []struct {
-		ID     string
-		UserID string
-		Status models.EnrichmentStatus
-		Result *models.EnrichmentResult
+		ID              string
+		UserID          string
+		Status          models.EnrichmentStatus
+		Phone           string
+		Email           string
+		PhoneProviderID *string
+		EmailProviderID *string
+		CompletedJobs   []string
 	}{
 		{
-			ID:     "e5f6a7b8-c9d0-1234-ef12-345678901234",
-			UserID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", // John Doe
-			Status: models.EnrichmentStatusPending,
+			ID:            "e5f6a7b8-c9d0-1234-ef12-345678901234",
+			UserID:        "a1b2c3d4-e5f6-7890-abcd-ef1234567890", // John Doe
+			Status:        models.EnrichmentStatusPending,
+			CompletedJobs: []string{},
 		},
 		{
-			ID:     "f6a7b8c9-d0e1-2345-f123-456789012345",
-			UserID: "b2c3d4e5-f6a7-8901-bcde-f12345678901", // Jane Smith
-			Status: models.EnrichmentStatusInProgress,
+			ID:              "f6a7b8c9-d0e1-2345-f123-456789012345",
+			UserID:          "b2c3d4e5-f6a7-8901-bcde-f12345678901", // Jane Smith
+			Status:          models.EnrichmentStatusInProgress,
+			PhoneProviderID: strPtr("e5f6a7b8-c9d0-1234-efab-345678901234"), // Acme Corp
+			EmailProviderID: strPtr("f6a7b8c9-d0e1-2345-fabc-456789012345"), // TechCo
+			CompletedJobs:   []string{},
 		},
 		{
-			ID:     "a7b8c9d0-e1f2-3456-0123-567890123456",
-			UserID: "c3d4e5f6-a7b8-9012-cdef-123456789012", // Bob Johnson
-			Status: models.EnrichmentStatusCompleted,
-			Result: &models.EnrichmentResult{
-				Phone: "+1-555-234-5678",
-				Email: "bob.johnson@startup.dev",
-			},
+			ID:            "a7b8c9d0-e1f2-3456-0123-567890123456",
+			UserID:        "c3d4e5f6-a7b8-9012-cdef-123456789012", // Bob Johnson
+			Status:        models.EnrichmentStatusCompleted,
+			Phone:         "+1-555-234-5678",
+			Email:         "bob.johnson@startup.dev",
+			CompletedJobs: []string{"phone", "email"},
 		},
 		{
-			ID:     "b8c9d0e1-f2a3-4567-1234-678901234567",
-			UserID: "d4e5f6a7-b8c9-0123-def1-234567890123", // Alice Williams
-			Status: models.EnrichmentStatusFailed,
+			ID:            "b8c9d0e1-f2a3-4567-1234-678901234567",
+			UserID:        "d4e5f6a7-b8c9-0123-def1-234567890123", // Alice Williams
+			Status:        models.EnrichmentStatusFailed,
+			CompletedJobs: []string{},
 		},
 	}
 
@@ -629,9 +637,14 @@ func (db *DB) SeedStaticEnrichments() error {
 			continue // Already seeded
 		}
 
+		// Build result JSON only if phone or email is set
 		var resultJSON *string
-		if e.Result != nil {
-			data, err := json.Marshal(e.Result)
+		if e.Phone != "" || e.Email != "" {
+			result := models.EnrichmentResult{
+				Phone: e.Phone,
+				Email: e.Email,
+			}
+			data, err := json.Marshal(result)
 			if err != nil {
 				return fmt.Errorf("failed to marshal result: %w", err)
 			}
@@ -639,13 +652,19 @@ func (db *DB) SeedStaticEnrichments() error {
 			resultJSON = &s
 		}
 
-		// Default to phone job for static enrichments
-		jobsJSON := `["phone"]`
+		// Marshal completed jobs
+		completedJobsJSON, err := json.Marshal(e.CompletedJobs)
+		if err != nil {
+			return fmt.Errorf("failed to marshal completed jobs: %w", err)
+		}
+
+		// Default to both phone and email jobs for static enrichments
+		jobsJSON := `["phone", "email"]`
 
 		_, err = db.conn.Exec(`
 			INSERT INTO enrichments (id, user_id, status, created_at, updated_at, result, current_provider_id, phone_provider_id, email_provider_id, jobs, completed_jobs, is_static)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-		`, e.ID, e.UserID, e.Status, now, now, resultJSON, nil, nil, nil, jobsJSON, "[]")
+		`, e.ID, e.UserID, e.Status, now, now, resultJSON, nil, e.PhoneProviderID, e.EmailProviderID, jobsJSON, string(completedJobsJSON))
 
 		if err != nil {
 			return fmt.Errorf("failed to seed enrichment %s: %w", e.ID, err)
@@ -655,4 +674,9 @@ func (db *DB) SeedStaticEnrichments() error {
 	}
 
 	return nil
+}
+
+// strPtr is a helper function to create a pointer to a string
+func strPtr(s string) *string {
+	return &s
 }

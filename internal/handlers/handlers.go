@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/surfe/mock-api/internal/data"
 	"github.com/surfe/mock-api/internal/database"
@@ -20,6 +22,19 @@ type Handler struct {
 // NewHandler creates a new handler with the given mock data and database
 func NewHandler(d *data.MockData, db *database.DB) *Handler {
 	return &Handler{data: d, db: db}
+}
+
+// GetContacts godoc
+// @Summary      Get all contacts
+// @Description  Returns all available contacts from the database
+// @Tags         contacts
+// @Accept       json
+// @Produce      json
+// @Success      200  {array}   models.Contact
+// @Router       /contacts [get]
+func (h *Handler) GetContacts(w http.ResponseWriter, r *http.Request) {
+	contacts := h.data.GetAllContacts()
+	writeJSON(w, http.StatusOK, contacts)
 }
 
 // GetContact godoc
@@ -244,6 +259,10 @@ func (h *Handler) GetEnrichment(w http.ResponseWriter, r *http.Request) {
 // @Failure      404         {object}  models.ErrorResponse
 // @Router       /thirdparty/{full_name} [get]
 func (h *Handler) GetThirdPartyInfo(w http.ResponseWriter, r *http.Request) {
+	// Add artificial latency (500ms - 2000ms) to simulate real third-party API
+	delay := 500 + rand.Intn(1500)
+	time.Sleep(time.Duration(delay) * time.Millisecond)
+
 	fullName := strings.TrimPrefix(r.URL.Path, "/thirdparty/")
 	if fullName == "" {
 		writeError(w, http.StatusBadRequest, "missing full name")

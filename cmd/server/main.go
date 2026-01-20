@@ -59,6 +59,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// API endpoints
+	mux.HandleFunc("/contacts", h.GetContacts)
 	mux.HandleFunc("/contact/", h.GetContact)
 	mux.HandleFunc("/enrichment/start", h.StartEnrichment)
 	mux.HandleFunc("/enrichment/", h.GetEnrichment)
