@@ -60,7 +60,16 @@ func main() {
 
 	// API endpoints
 	mux.HandleFunc("/contacts", h.GetContacts)
-	mux.HandleFunc("/contact/", h.GetContact)
+	mux.HandleFunc("/contact/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.GetContact(w, r)
+		case http.MethodPut:
+			h.UpdateContact(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	mux.HandleFunc("/enrichment/start", h.StartEnrichment)
 	mux.HandleFunc("/enrichment/", h.GetEnrichment)
 	mux.HandleFunc("/thirdparty/", h.GetThirdPartyInfo)
