@@ -443,17 +443,18 @@ func (w *Worker) processJobForEnrichment(enrichmentID string, contact models.Con
 					}
 				}
 
-				// Mark job as completed (after result and contact are updated)
-				// This will read the latest result from DB, so it should have our value
-				if err := w.db.AddCompletedJob(enrichmentID, jobType); err != nil {
-					log.Printf("Error marking %s as completed for enrichment %s: %v", jobType, enrichmentID, err)
-					continue
-				}
+			// Mark job as completed (after result and contact are updated)
+			// This will read the latest result from DB, so it should have our value
+			if err := w.db.AddCompletedJob(enrichmentID, jobType); err != nil {
+				log.Printf("Error marking %s as completed for enrichment %s: %v", jobType, enrichmentID, err)
+				continue
+			}
 
-				// Clear provider ID since job is completed (result is already saved)
-				if err := w.db.UpdateEnrichmentStatusWithJobProvider(enrichmentID, models.EnrichmentStatusInProgress, nil, nil, jobType); err != nil {
-					log.Printf("Error clearing provider for completed %s job in enrichment %s: %v", jobType, enrichmentID, err)
-				}
+			// Clear provider ID since job is completed (result is already saved)
+			// Use ClearJobProvider to avoid overwriting the status set by AddCompletedJob
+			if err := w.db.ClearJobProvider(enrichmentID, jobType); err != nil {
+				log.Printf("Error clearing provider for completed %s job in enrichment %s: %v", jobType, enrichmentID, err)
+			}
 
 				log.Printf("%s job completed for enrichment %s by provider %s", jobType, enrichmentID, provider.Name)
 				return // Job found, stop processing this job type

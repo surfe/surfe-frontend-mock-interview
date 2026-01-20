@@ -581,6 +581,33 @@ func (db *DB) UpdateEnrichmentStatusWithJobProvider(id string, status models.Enr
 	return nil
 }
 
+// ClearJobProvider clears the provider ID for a specific job type without changing the status
+func (db *DB) ClearJobProvider(id string, jobType string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	if jobType == "phone" {
+		_, err := db.conn.Exec(`
+			UPDATE enrichments
+			SET updated_at = ?, phone_provider_id = ?
+			WHERE id = ?
+		`, now, nil, id)
+		if err != nil {
+			return fmt.Errorf("failed to clear phone provider: %w", err)
+		}
+	} else if jobType == "email" {
+		_, err := db.conn.Exec(`
+			UPDATE enrichments
+			SET updated_at = ?, email_provider_id = ?
+			WHERE id = ?
+		`, now, nil, id)
+		if err != nil {
+			return fmt.Errorf("failed to clear email provider: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // SeedStaticEnrichments creates the static test enrichments if they don't exist
 func (db *DB) SeedStaticEnrichments() error {
 	staticEnrichments := []struct {
