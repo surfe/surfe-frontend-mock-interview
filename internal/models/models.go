@@ -59,10 +59,18 @@ type EnrichmentContactInfo struct {
 	Companies      []string `json:"companies,omitempty"`
 }
 
+// JobType represents the type of enrichment job
+type JobType string
+
+const (
+	JobTypePhone JobType = "phone"
+	JobTypeEmail JobType = "email"
+)
+
 // EnrichmentStartRequest is the payload for starting an enrichment
 type EnrichmentStartRequest struct {
 	UserID  string                 `json:"userId"`
-	Jobs    []string               `json:"jobs,omitempty"`    // Array of "email" and/or "phone"
+	Jobs    []JobType              `json:"jobs,omitempty"`    // Array of "email" and/or "phone"
 	Contact *EnrichmentContactInfo `json:"contact,omitempty"` // Optional contact info to boost success rate
 }
 
