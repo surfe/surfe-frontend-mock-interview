@@ -144,15 +144,13 @@ func (h *Handler) StartEnrichment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate jobs if provided
-	jobs := req.Jobs
-	if len(jobs) > 0 {
-		validJobs := make([]string, 0, len(jobs))
-		for _, job := range jobs {
-			if job == "phone" || job == "email" {
-				validJobs = append(validJobs, job)
+	var jobs []string
+	if len(req.Jobs) > 0 {
+		for _, job := range req.Jobs {
+			if job == models.JobTypePhone || job == models.JobTypeEmail {
+				jobs = append(jobs, string(job))
 			}
 		}
-		jobs = validJobs
 		if len(jobs) == 0 {
 			writeError(w, http.StatusBadRequest, "jobs must contain 'phone' and/or 'email'")
 			return

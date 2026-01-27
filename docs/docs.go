@@ -191,6 +191,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/contacts": {
+            "get": {
+                "description": "Returns all available contacts from the database",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "contacts"
+                ],
+                "summary": "Get all contacts",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.Contact"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/enrichment/start": {
             "post": {
                 "description": "Starts an enrichment process, taking the userID and additional optional payload",
@@ -445,7 +471,7 @@ const docTemplate = `{
                     "description": "Array of \"email\" and/or \"phone\"",
                     "type": "array",
                     "items": {
-                        "type": "string"
+                        "$ref": "#/definitions/models.JobType"
                     }
                 },
                 "userId": {
@@ -512,6 +538,17 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "models.JobType": {
+            "type": "string",
+            "enum": [
+                "phone",
+                "email"
+            ],
+            "x-enum-varnames": [
+                "JobTypePhone",
+                "JobTypeEmail"
+            ]
         },
         "models.Provider": {
             "type": "object",
